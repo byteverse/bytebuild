@@ -38,10 +38,8 @@ library
   exposed-modules:
     Data.ByteArray.Builder.Small
     Data.ByteArray.Builder.Small.Unsafe
-  -- other-modules:
-  -- other-extensions:
   build-depends:
-      base >=4.12.0.0 && <5
+    , base >=4.12.0.0 && <5
     , byteslice >=0.1 && <0.2
     , primitive-offset >=0.2 && <0.3
     , run-st >=0.1 && <0.2
@@ -50,7 +48,7 @@ library
     build-depends: primitive-checked >= 0.7 && <0.8
   else
     build-depends: primitive >= 0.7 && <0.8
-  ghc-options: -Wall -O2 -ddump-to-file -ddump-simpl -dsuppress-all
+  ghc-options: -Wall -O2
   hs-source-dirs: src
   default-language: Haskell2010
 
@@ -60,7 +58,7 @@ test-suite test
   hs-source-dirs: test
   main-is: Main.hs
   build-depends:
-      base >=4.12.0.0 && <5
+    , base >=4.12.0.0 && <5
     , byteslice
     , small-bytearray-builder
     , QuickCheck >=2.13.1 && <2.14
