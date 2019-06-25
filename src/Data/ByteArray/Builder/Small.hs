@@ -24,6 +24,7 @@ module Data.ByteArray.Builder.Small
     -- * Numbers
   , word64Dec
   , word64PaddedUpperHex
+  , word32PaddedUpperHex
   ) where
 
 import Control.Monad.Primitive
@@ -57,6 +58,7 @@ instance Monoid Builder where
   mempty = Builder $ \_ off0 _ s0 -> (# s0, off0 #)
 
 -- | Run a builder. An accurate size hint is important for good performance.
+-- The size hint should be slightly larger than the actual size.
 run ::
      Int -- ^ Hint for upper bound on size
   -> Builder -- ^ Builder
@@ -71,6 +73,7 @@ run hint b = runByteArrayST $ do
             unsafeFreezeByteArray arr
   go hint
 
+-- | Variant of 'pasteArrayST' that runs in 'IO'.
 pasteArrayIO ::
      MutableBytes RealWorld -- ^ Buffer
   -> (a -> Builder) -- ^ Builder
@@ -78,6 +81,8 @@ pasteArrayIO ::
   -> IO (V.Vector a, MutableBytes RealWorld) -- ^ Shifted vector, shifted buffer
 pasteArrayIO !arr f !xs = stToIO (pasteArrayST arr f xs)
 
+-- | Fold over a vector, applying the builder to each element until
+-- the buffer cannot accomodate any more.
 pasteArrayST ::
      MutableBytes s -- ^ Buffer
   -> (a -> Builder) -- ^ Builder
@@ -123,6 +128,10 @@ pasteGrowIO ::
      -- ^ Final buffer that accomodated the builder.
 pasteGrowIO !n b !arr = stToIO (pasteGrowST n b arr)
 
+-- | Execute the builder, pasting its contents into a buffer.
+-- If the buffer is not large enough, this returns 'Nothing'.
+-- Otherwise, it returns the index in the buffer that follows
+-- the payload just written.
 pasteST :: Builder -> MutableBytes s -> ST s (Maybe Int)
 {-# inline pasteST #-}
 pasteST (Builder f) (MutableBytes (MutableByteArray arr) (I# off) (I# len)) =
@@ -131,10 +140,14 @@ pasteST (Builder f) (MutableBytes (MutableByteArray arr) (I# off) (I# len)) =
       then (# s1, Just (I# r) #)
       else (# s1, Nothing #)
 
+-- | Variant of 'pasteST' that runs in 'IO'.
 pasteIO :: Builder -> MutableBytes RealWorld -> IO (Maybe Int)
 {-# inline pasteIO #-}
 pasteIO b m = stToIO (pasteST b m)
 
+-- | Constructor for 'Builder' that works on a function with lifted
+-- arguments instead of unlifted ones. This is just as unsafe as the
+-- actual constructor.
 construct :: (forall s. MutableBytes s -> ST s (Maybe Int)) -> Builder
 construct f = Builder
   $ \arr off len s0 ->
@@ -151,9 +164,11 @@ fromUnsafe (Unsafe.Builder f) = Builder $ \arr off len s0 ->
       1# -> f arr off s0
       _ -> (# s0, (-1#) #)
 
+-- | Create a builder from an unsliced byte sequence.
 bytearray :: ByteArray -> Builder
 bytearray a = bytes (Bytes a 0 (sizeofByteArray a))
 
+-- | Create a builder from a sliced byte sequence.
 bytes :: Bytes -> Builder
 bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len >= slen
   then do
@@ -161,12 +176,25 @@ bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len 
     pure (Just (len - slen))
   else pure Nothing
 
+-- | Encodes an unsigned 64-bit integer as decimal.
+-- This encoding never starts with a zero unless the
+-- argument was zero.
 word64Dec :: Word64 -> Builder
 word64Dec w = fromUnsafe (Unsafe.word64Dec w)
 
+-- | Encode a 64-bit unsigned integer as hexadecimal, zero-padding
+-- the encoding to 16 digits. This uses uppercase for the alphabetical
+-- digits. For example, this encodes the number 1022 as @00000000000003FE@.
 word64PaddedUpperHex :: Word64 -> Builder
 word64PaddedUpperHex w =
   fromUnsafe (Unsafe.word64PaddedUpperHex w)
+
+-- | Encode a 32-bit unsigned integer as hexadecimal, zero-padding
+-- the encoding to 8 digits. This uses uppercase for the alphabetical
+-- digits. For example, this encodes the number 1022 as @000003FE@.
+word32PaddedUpperHex :: Word32 -> Builder
+word32PaddedUpperHex w =
+  fromUnsafe (Unsafe.word32PaddedUpperHex w)
 
 unST :: ST s a -> State# s -> (# State# s, a #)
 unST (ST f) = f

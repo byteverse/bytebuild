@@ -12,14 +12,19 @@
 -- | The functions in this module do not check to
 -- see if there is enough space in the buffer.
 module Data.ByteArray.Builder.Small.Unsafe
-  ( Builder(..)
+  ( -- * Builder
+    Builder(..)
+  , construct
+    -- * Execute
   , run
   , pasteST
   , pasteIO
-  , construct
+    -- * Combine
   , append
+    -- * Encode Integral Types
   , word64Dec
   , word64PaddedUpperHex
+  , word32PaddedUpperHex
   ) where
 
 import Control.Monad.Primitive
@@ -34,11 +39,14 @@ import GHC.Word
 import Data.Kind
 import GHC.TypeLits (KnownNat,Nat,type (+),natVal')
 
+-- | A builder parameterized by the maximum number of bytes it uses
+-- when executed.
 newtype Builder :: Nat -> Type where
    Builder ::
         (forall s. MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #))
      -> Builder n
 
+-- | Execute the builder. This function is safe.
 run :: forall n. KnownNat n
   => Builder n -- ^ Builder
   -> ByteArray
@@ -63,6 +71,9 @@ pasteIO :: Builder n -> MutableByteArray RealWorld -> Int -> IO Int
 {-# inline pasteIO #-}
 pasteIO b m off = stToIO (pasteST b m off)
 
+-- | Constructor for 'Builder' that works on a function with lifted
+-- arguments instead of unlifted ones. This is just as unsafe as the
+-- actual constructor.
 construct :: (forall s. MutableByteArray s -> Int -> ST s Int) -> Builder n
 {-# inline construct #-}
 construct f = Builder
@@ -70,12 +81,14 @@ construct f = Builder
     case unST (f (MutableByteArray arr) (I# off)) s0 of
       (# s1, (I# n) #) -> (# s1, n #)
 
+-- | Concatenate two builders.
 append :: Builder n -> Builder m -> Builder (n + m)
 append (Builder f) (Builder g) =
   Builder $ \arr off0 s0 -> case f arr off0 s0 of
     (# s1, r #) -> g arr r s1
 
--- | Requires up to 19 bytes.
+-- | Requires up to 19 bytes. Encodes an unsigned 64-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
 word64Dec :: Word64 -> Builder 19
 word64Dec (W64# w) = word64Dec# w
 
@@ -115,9 +128,18 @@ toHexUpper w' = fromIntegral
   loSolved = w + 48
   hiSolved = w + 55
 
--- | Requires up to 16 bytes.
+-- | Requires exactly 16 bytes. Encodes a 64-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 16 digits. This uses
+-- uppercase for the alphabetical digits. For example, this encodes the
+-- number 1022 as @00000000000003FE@.
 word64PaddedUpperHex :: Word64 -> Builder 16
 word64PaddedUpperHex (W64# w) = word64PaddedUpperHex# w
+
+-- | Requires exactly 8 bytes. Encodes a 32-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 8 digits. This uses
+-- uppercase for the alphabetical digits.
+word32PaddedUpperHex :: Word32 -> Builder 8
+word32PaddedUpperHex (W32# w) = word32PaddedUpperHex# w
 
 word64PaddedUpperHex# :: Word# -> Builder 16
 {-# noinline word64PaddedUpperHex# #-}
@@ -142,6 +164,23 @@ word64PaddedUpperHex# w# = construct $ \arr off -> do
   where
   w = W# w#
 
+word32PaddedUpperHex# :: Word# -> Builder 8
+{-# noinline word32PaddedUpperHex# #-}
+word32PaddedUpperHex# w# = construct $ \arr off -> do
+  writeByteArray arr off (toHexUpper (unsafeShiftR w 28))
+  writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 24))
+  writeByteArray arr (off + 2) (toHexUpper (unsafeShiftR w 20))
+  writeByteArray arr (off + 3) (toHexUpper (unsafeShiftR w 16))
+  writeByteArray arr (off + 4) (toHexUpper (unsafeShiftR w 12))
+  writeByteArray arr (off + 5) (toHexUpper (unsafeShiftR w 8))
+  writeByteArray arr (off + 6) (toHexUpper (unsafeShiftR w 4))
+  writeByteArray arr (off + 7) (toHexUpper (unsafeShiftR w 0))
+  pure (off + 8)
+  where
+  w = W# w#
+
+-- Reverse the bytes in the designated slice. This takes
+-- an inclusive start offset and an inclusive end offset.
 reverseBytes :: MutableByteArray s -> Int -> Int -> ST s ()
 {-# inline reverseBytes #-}
 reverseBytes arr begin end = go begin end where
