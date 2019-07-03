@@ -12,12 +12,14 @@ import Debug.Trace
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.QuickCheck ((===))
 import Text.Printf (printf)
+import qualified Data.ByteString.Builder as BB
 import qualified Data.Primitive as PM
 import qualified Data.List as L
 import qualified Data.Vector as V
 import qualified Test.Tasty.QuickCheck as TQC
 import qualified Test.QuickCheck as QC
 import qualified GHC.Exts as Exts
+import qualified Data.ByteString.Lazy.Char8 as LB
 
 main :: IO ()
 main = defaultMain tests
@@ -30,6 +32,10 @@ tests = testGroup "Tests"
       run 1 (word64Dec x <> word64Dec y <> word64Dec z)
       ===
       pack (show x ++ show y ++ show z)
+  , TQC.testProperty "word64BE-x3" $ \x y z ->
+      run 1 (word64BE x <> word64BE y <> word64BE z)
+      ===
+      pack (LB.unpack (BB.toLazyByteString (BB.word64BE x <> BB.word64BE y <> BB.word64BE z)))
   , TQC.testProperty "word64PaddedUpperHex" $ \w ->
       run 1 (word64PaddedUpperHex w)
       ===

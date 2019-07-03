@@ -8,6 +8,7 @@
 {-# language LambdaCase #-}
 {-# language TypeOperators #-}
 {-# language DataKinds #-}
+{-# language TypeApplications #-}
 
 -- | The functions in this module do not check to
 -- see if there is enough space in the buffer.
@@ -22,20 +23,26 @@ module Data.ByteArray.Builder.Small.Unsafe
     -- * Combine
   , append
     -- * Encode Integral Types
+    -- ** Human-Readable
   , word64Dec
+  , int64Dec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
+    -- ** Machine-Readable
+  , word64BE
+  , word32BE
+  , word16BE
   ) where
 
 import Control.Monad.Primitive
 import Control.Monad.ST
 import Data.Bits
-import Data.Bytes.Types
 import Data.Char (ord)
 import Data.Primitive
 import GHC.Exts
 import GHC.ST
 import GHC.Word
+import GHC.Int
 import Data.Kind
 import GHC.TypeLits (KnownNat,Nat,type (+),natVal')
 
@@ -92,6 +99,13 @@ append (Builder f) (Builder g) =
 word64Dec :: Word64 -> Builder 19
 word64Dec (W64# w) = word64Dec# w
 
+-- | Requires up to 20 bytes. Encodes a signed 64-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+int64Dec :: Int64 -> Builder 20
+int64Dec (I64# w) = int64Dec# w
+
 -- | Requires up to 19 bytes.
 word64Dec# :: Word# -> Builder 19
 {-# noinline word64Dec# #-}
@@ -111,6 +125,32 @@ word64Dec# w# = construct $ \arr off0 -> if w /= 0
     pure (off0 + 1)
   where
   w = W64# w#
+
+internalWordLoop :: MutableByteArray s -> Int -> Word -> ST s Int
+{-# inline internalWordLoop #-}
+internalWordLoop arr off0 x0 = go off0 x0 where
+  go !off !(x :: Word) = if x > 0
+    then do
+      let (y,z) = quotRem x 10
+      writeByteArray arr off (fromIntegral (z + 0x30) :: Word8)
+      go (off + 1) y
+    else do
+      reverseBytes arr off0 (off - 1)
+      pure off
+
+-- | Requires up to 19 bytes.
+int64Dec# :: Int# -> Builder 20
+{-# noinline int64Dec# #-}
+int64Dec# w# = construct $ \arr off0 -> case compare w 0 of
+  GT -> internalWordLoop arr off0 (fromIntegral w)
+  EQ -> do
+    writeByteArray arr off0 (c2w '0')
+    pure (off0 + 1)
+  LT -> do
+    writeByteArray arr off0 (c2w '-')
+    internalWordLoop arr (off0 + 1) (fromIntegral (negate w))
+  where
+  w = I64# w#
 
 -- Convert a number between 0 and 16 to the ASCII
 -- representation of its hexadecimal character.
@@ -178,6 +218,38 @@ word32PaddedUpperHex# w# = construct $ \arr off -> do
   pure (off + 8)
   where
   w = W# w#
+
+-- | Requires exactly 8 bytes. Dump the octets of a 64-bit
+-- word in a big-endian fashion.
+word64BE :: Word64 -> Builder 8
+word64BE w = construct $ \arr off -> do
+  writeByteArray arr (off    ) (fromIntegral @Word64 @Word8 (unsafeShiftR w 56))
+  writeByteArray arr (off + 1) (fromIntegral @Word64 @Word8 (unsafeShiftR w 48))
+  writeByteArray arr (off + 2) (fromIntegral @Word64 @Word8 (unsafeShiftR w 40))
+  writeByteArray arr (off + 3) (fromIntegral @Word64 @Word8 (unsafeShiftR w 32))
+  writeByteArray arr (off + 4) (fromIntegral @Word64 @Word8 (unsafeShiftR w 24))
+  writeByteArray arr (off + 5) (fromIntegral @Word64 @Word8 (unsafeShiftR w 16))
+  writeByteArray arr (off + 6) (fromIntegral @Word64 @Word8 (unsafeShiftR w 8))
+  writeByteArray arr (off + 7) (fromIntegral @Word64 @Word8 w)
+  pure (off + 8)
+
+-- | Requires exactly 4 bytes. Dump the octets of a 32-bit
+-- word in a big-endian fashion.
+word32BE :: Word32 -> Builder 4
+word32BE w = construct $ \arr off -> do
+  writeByteArray arr (off    ) (fromIntegral @Word32 @Word8 (unsafeShiftR w 24))
+  writeByteArray arr (off + 1) (fromIntegral @Word32 @Word8 (unsafeShiftR w 16))
+  writeByteArray arr (off + 2) (fromIntegral @Word32 @Word8 (unsafeShiftR w 8))
+  writeByteArray arr (off + 3) (fromIntegral @Word32 @Word8 w)
+  pure (off + 4)
+
+-- | Requires exactly 2 bytes. Dump the octets of a 16-bit
+-- word in a big-endian fashion.
+word16BE :: Word16 -> Builder 2
+word16BE w = construct $ \arr off -> do
+  writeByteArray arr (off    ) (fromIntegral @Word16 @Word8 (unsafeShiftR w 8))
+  writeByteArray arr (off + 1) (fromIntegral @Word16 @Word8 w)
+  pure (off + 2)
 
 -- Reverse the bytes in the designated slice. This takes
 -- an inclusive start offset and an inclusive end offset.

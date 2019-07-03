@@ -21,10 +21,16 @@ module Data.ByteArray.Builder.Small
     -- * Materialized Byte Sequences
   , bytes
   , bytearray
-    -- * Numbers
+    -- * Encode Integral Types
+    -- ** Human-Readable
   , word64Dec
+  , int64Dec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
+    -- ** Machine-Readable
+  , word64BE
+  , word32BE
+  , word16BE
   ) where
 
 import Control.Monad.Primitive
@@ -32,6 +38,7 @@ import Control.Monad.ST
 import Control.Monad.ST.Run (runByteArrayST)
 import Data.Bytes.Types
 import Data.Primitive
+import Data.Int (Int64)
 import GHC.Exts
 import GHC.ST
 import GHC.Word
@@ -182,6 +189,13 @@ bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len 
 word64Dec :: Word64 -> Builder
 word64Dec w = fromUnsafe (Unsafe.word64Dec w)
 
+-- | Encodes a signed 64-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+int64Dec :: Int64 -> Builder
+int64Dec w = fromUnsafe (Unsafe.int64Dec w)
+
 -- | Encode a 64-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 16 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 1022 as @00000000000003FE@.
@@ -203,3 +217,17 @@ shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
 shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
   primitive_ (shrinkMutableByteArray# arr sz)
 
+-- | Requires exactly 8 bytes. Dump the octets of a 64-bit
+-- word in a big-endian fashion.
+word64BE :: Word64 -> Builder
+word64BE w = fromUnsafe (Unsafe.word64BE w)
+
+-- | Requires exactly 4 bytes. Dump the octets of a 32-bit
+-- word in a big-endian fashion.
+word32BE :: Word32 -> Builder
+word32BE w = fromUnsafe (Unsafe.word32BE w)
+
+-- | Requires exactly 2 bytes. Dump the octets of a 16-bit
+-- word in a big-endian fashion.
+word16BE :: Word16 -> Builder
+word16BE w = fromUnsafe (Unsafe.word16BE w)
