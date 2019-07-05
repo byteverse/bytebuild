@@ -90,6 +90,8 @@ construct f = Builder
     case unST (f (MutableByteArray arr) (I# off)) s0 of
       (# s1, (I# n) #) -> (# s1, n #)
 
+infixr 9 `append`
+
 -- | Concatenate two builders.
 append :: Builder n -> Builder m -> Builder (n + m)
 append (Builder f) (Builder g) =

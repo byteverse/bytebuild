@@ -21,33 +21,46 @@ import qualified Test.QuickCheck as QC
 import qualified GHC.Exts as Exts
 import qualified Data.ByteString.Lazy.Char8 as LB
 
+import qualified HexWord64
+
 main :: IO ()
 main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Tests"
-  [ TQC.testProperty "word64Dec" $ \w ->
-      run 1 (word64Dec w) === pack (show w)
-  , TQC.testProperty "word64Dec-x3" $ \x y z ->
-      run 1 (word64Dec x <> word64Dec y <> word64Dec z)
-      ===
-      pack (show x ++ show y ++ show z)
-  , TQC.testProperty "int64Dec-x3" $ \x y z ->
-      run 1 (int64Dec x <> int64Dec y <> int64Dec z)
-      ===
-      pack (show x ++ show y ++ show z)
-  , TQC.testProperty "word64BE-x3" $ \x y z ->
-      run 1 (word64BE x <> word64BE y <> word64BE z)
-      ===
-      pack (LB.unpack (BB.toLazyByteString (BB.word64BE x <> BB.word64BE y <> BB.word64BE z)))
-  , TQC.testProperty "word64PaddedUpperHex" $ \w ->
-      run 1 (word64PaddedUpperHex w)
-      ===
-      pack (showWord64PaddedUpperHex w)
-  , TQC.testProperty "pasteArrayST" $ \(xs :: [Word64]) ->
-      (runArray word64Dec (V.fromList xs))
-      ===
-      pack (foldMap show xs)
+  [ testGroup "live"
+    [ TQC.testProperty "word64Dec" $ \w ->
+        run 1 (word64Dec w) === pack (show w)
+    , TQC.testProperty "word64Dec-x3" $ \x y z ->
+        run 1 (word64Dec x <> word64Dec y <> word64Dec z)
+        ===
+        pack (show x ++ show y ++ show z)
+    , TQC.testProperty "int64Dec-x3" $ \x y z ->
+        run 1 (int64Dec x <> int64Dec y <> int64Dec z)
+        ===
+        pack (show x ++ show y ++ show z)
+    , TQC.testProperty "word64BE-x3" $ \x y z ->
+        run 1 (word64BE x <> word64BE y <> word64BE z)
+        ===
+        pack (LB.unpack (BB.toLazyByteString (BB.word64BE x <> BB.word64BE y <> BB.word64BE z)))
+    , TQC.testProperty "word64PaddedUpperHex" $ \w ->
+        run 1 (word64PaddedUpperHex w)
+        ===
+        pack (showWord64PaddedUpperHex w)
+    , TQC.testProperty "pasteArrayST" $ \(xs :: [Word64]) ->
+        (runArray word64Dec (V.fromList xs))
+        ===
+        pack (foldMap show xs)
+    ]
+  , testGroup "alternate"
+    [ TQC.testProperty "HexWord64" $ \x y ->
+        run 1
+          (  fromUnsafe (HexWord64.word64PaddedUpperHex x)
+          <> fromUnsafe (HexWord64.word64PaddedUpperHex y)
+          )
+        ===
+        pack (showWord64PaddedUpperHex x <> showWord64PaddedUpperHex y)
+    ]
   ]
 
 pack :: String -> ByteArray

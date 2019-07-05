@@ -10,6 +10,7 @@ module Data.ByteArray.Builder.Small
   ( -- * Unsafe Primitives
     Builder(..)
   , construct
+  , fromUnsafe
     -- * Evaluation
   , run
   , pasteST
