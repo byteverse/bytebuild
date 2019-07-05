@@ -27,6 +27,8 @@ module Data.ByteArray.Builder.Small
   , int64Dec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
+  , word16PaddedUpperHex
+  , word8PaddedUpperHex
     -- ** Machine-Readable
   , word64BE
   , word32BE
@@ -209,6 +211,20 @@ word64PaddedUpperHex w =
 word32PaddedUpperHex :: Word32 -> Builder
 word32PaddedUpperHex w =
   fromUnsafe (Unsafe.word32PaddedUpperHex w)
+
+-- | Encode a 16-bit unsigned integer as hexadecimal, zero-padding
+-- the encoding to 4 digits. This uses uppercase for the alphabetical
+-- digits. For example, this encodes the number 1022 as @03FE@.
+word16PaddedUpperHex :: Word16 -> Builder
+word16PaddedUpperHex w =
+  fromUnsafe (Unsafe.word16PaddedUpperHex w)
+
+-- | Encode a 8-bit unsigned integer as hexadecimal, zero-padding
+-- the encoding to 2 digits. This uses uppercase for the alphabetical
+-- digits. For example, this encodes the number 11 as @0B@.
+word8PaddedUpperHex :: Word8 -> Builder
+word8PaddedUpperHex w =
+  fromUnsafe (Unsafe.word8PaddedUpperHex w)
 
 unST :: ST s a -> State# s -> (# State# s, a #)
 unST (ST f) = f

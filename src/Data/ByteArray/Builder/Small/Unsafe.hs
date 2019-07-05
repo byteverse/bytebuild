@@ -28,6 +28,8 @@ module Data.ByteArray.Builder.Small.Unsafe
   , int64Dec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
+  , word16PaddedUpperHex
+  , word8PaddedUpperHex
     -- ** Machine-Readable
   , word64BE
   , word32BE
@@ -172,6 +174,20 @@ word64PaddedUpperHex (W64# w) = word64PaddedUpperHex# w
 word32PaddedUpperHex :: Word32 -> Builder 8
 word32PaddedUpperHex (W32# w) = word32PaddedUpperHex# w
 
+-- | Requires exactly 4 bytes. Encodes a 16-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 4 digits. This uses
+-- uppercase for the alphabetical digits.
+word16PaddedUpperHex :: Word16 -> Builder 4
+word16PaddedUpperHex (W16# w) = word16PaddedUpperHex# w
+
+-- | Requires exactly 2 bytes. Encodes a 8-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 2 digits. This uses
+-- uppercase for the alphabetical digits.
+word8PaddedUpperHex :: Word8 -> Builder 2
+word8PaddedUpperHex (W8# w) = word8PaddedUpperHex# w
+
+-- TODO: Is it actually worth unrolling this loop. I suspect that it
+-- might not be. Benchmark this.
 word64PaddedUpperHex# :: Word# -> Builder 16
 {-# noinline word64PaddedUpperHex# #-}
 word64PaddedUpperHex# w# = construct $ \arr off -> do
@@ -207,6 +223,29 @@ word32PaddedUpperHex# w# = construct $ \arr off -> do
   writeByteArray arr (off + 6) (toHexUpper (unsafeShiftR w 4))
   writeByteArray arr (off + 7) (toHexUpper (unsafeShiftR w 0))
   pure (off + 8)
+  where
+  w = W# w#
+
+-- Not sure if it is beneficial to inline this. We just let
+-- GHC make the decision. Open an issue on github if this is
+-- a problem.
+word16PaddedUpperHex# :: Word# -> Builder 4
+word16PaddedUpperHex# w# = construct $ \arr off -> do
+  writeByteArray arr off (toHexUpper (unsafeShiftR w 12))
+  writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 8))
+  writeByteArray arr (off + 2) (toHexUpper (unsafeShiftR w 4))
+  writeByteArray arr (off + 3) (toHexUpper (unsafeShiftR w 0))
+  pure (off + 4)
+  where
+  w = W# w#
+
+-- Definitely want this to inline. It's maybe a dozen instructions total.
+word8PaddedUpperHex# :: Word# -> Builder 2
+{-# inline word8PaddedUpperHex #-}
+word8PaddedUpperHex# w# = construct $ \arr off -> do
+  writeByteArray arr off (toHexUpper (unsafeShiftR w 4))
+  writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 0))
+  pure (off + 2)
   where
   w = W# w#
 
