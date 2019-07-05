@@ -32,6 +32,10 @@ tests = testGroup "Tests"
       run 1 (word64Dec x <> word64Dec y <> word64Dec z)
       ===
       pack (show x ++ show y ++ show z)
+  , TQC.testProperty "int64Dec-x3" $ \x y z ->
+      run 1 (int64Dec x <> int64Dec y <> int64Dec z)
+      ===
+      pack (show x ++ show y ++ show z)
   , TQC.testProperty "word64BE-x3" $ \x y z ->
       run 1 (word64BE x <> word64BE y <> word64BE z)
       ===
