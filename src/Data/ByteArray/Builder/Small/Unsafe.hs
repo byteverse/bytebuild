@@ -110,16 +110,7 @@ int64Dec (I64# w) = int64Dec# w
 word64Dec# :: Word# -> Builder 19
 {-# noinline word64Dec# #-}
 word64Dec# w# = construct $ \arr off0 -> if w /= 0
-  then do
-    let go off x = if x > 0
-          then do
-            let (y,z) = quotRem x 10
-            writeByteArray arr off (fromIntegral (z + 0x30) :: Word8)
-            go (off + 1) y
-          else do
-            reverseBytes arr off0 (off - 1)
-            pure off
-    go off0 w
+  then internalWordLoop arr off0 (W# w#)
   else do
     writeByteArray arr off0 (c2w '0')
     pure (off0 + 1)
