@@ -55,6 +55,8 @@ import qualified Data.ByteArray.Builder.Small.Unsafe as Unsafe
 -- | An unmaterialized sequence of bytes that may be pasted
 -- into a mutable byte array.
 newtype Builder = Builder
+  -- This functions takes an offset and a number of remaining bytes
+  -- and returns the new offset.
   (forall s. MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #))
 
 instance Semigroup Builder where
@@ -115,15 +117,15 @@ pasteArrayST (MutableBytes arr off0 len0) f !xs0 = do
 pasteGrowST ::
      Int -- ^ How many bytes to grow by at a time
   -> Builder
-  -> MutableByteArray s
+  -> MutableByteArrayOffset s
      -- ^ Initial buffer, used linearly. Do not reuse this argument.
   -> ST s (MutableByteArrayOffset s)
      -- ^ Final buffer that accomodated the builder.
-pasteGrowST !n b !arr0 = do
-  let go !arr !sz = pasteST b (MutableBytes arr 0 sz) >>= \case
+pasteGrowST !n b !(MutableByteArrayOffset arr0 off0) = do
+  let go !arr !sz = pasteST b (MutableBytes arr off0 (sz - off0)) >>= \case
         Nothing -> do
           let szNext = sz + n
-          arrNext <- PM.newByteArray szNext
+          arrNext <- PM.resizeMutableByteArray arr szNext
           go arrNext szNext
         Just ix -> pure (MutableByteArrayOffset{array=arr,offset=ix})
   go arr0 =<< PM.getSizeofMutableByteArray arr0
@@ -132,7 +134,7 @@ pasteGrowST !n b !arr0 = do
 pasteGrowIO ::
      Int -- ^ How many bytes to grow by at a time
   -> Builder
-  -> MutableByteArray RealWorld
+  -> MutableByteArrayOffset RealWorld
      -- ^ Initial buffer, used linearly. Do not reuse this argument.
   -> IO (MutableByteArrayOffset RealWorld)
      -- ^ Final buffer that accomodated the builder.
@@ -183,7 +185,7 @@ bytes :: Bytes -> Builder
 bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len >= slen
   then do
     copyByteArray arr off src soff slen
-    pure (Just (len - slen))
+    pure (Just (off + slen))
   else pure Nothing
 
 -- | Encodes an unsigned 64-bit integer as decimal.

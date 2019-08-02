@@ -19,6 +19,7 @@ module Data.ByteArray.Builder.Small.Unsafe
     -- * Execute
   , run
   , pasteST
+  , pasteGrowST
   , pasteIO
     -- * Combine
   , append
@@ -34,6 +35,7 @@ module Data.ByteArray.Builder.Small.Unsafe
   , word64BE
   , word32BE
   , word16BE
+  , word8
   ) where
 
 import Control.Monad.Primitive
@@ -47,6 +49,9 @@ import GHC.Word
 import GHC.Int
 import Data.Kind
 import GHC.TypeLits (KnownNat,Nat,type (+),natVal')
+import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
+
+import qualified Data.Primitive as PM
 
 -- | A builder parameterized by the maximum number of bytes it uses
 -- when executed.
@@ -73,6 +78,29 @@ pasteST :: Builder n -> MutableByteArray s -> Int -> ST s Int
 pasteST (Builder f) (MutableByteArray arr) (I# off) =
   ST $ \s0 -> case f arr off s0 of
     (# s1, r #) -> (# s1, (I# r) #)
+
+-- | Paste the builder into the byte array starting at offset zero.
+-- This reallocates the byte array if it cannot accomodate the builder,
+-- growing it by the minimum amount necessary.
+pasteGrowST :: forall n s. KnownNat n
+  => Builder n
+  -> MutableByteArrayOffset s
+     -- ^ Initial buffer, used linearly. Do not reuse this argument.
+  -> ST s (MutableByteArrayOffset s)
+     -- ^ Final buffer that accomodated the builder.
+{-# inline pasteGrowST #-}
+pasteGrowST b !(MutableByteArrayOffset{array=arr0,offset=off0}) = do
+  sz0 <- PM.getSizeofMutableByteArray arr0
+  let req = fromIntegral (natVal' (proxy# :: Proxy# n))
+  let sz1 = off0 + req
+  if sz1 <= sz0
+    then do
+      off1 <- pasteST b arr0 off0
+      pure (MutableByteArrayOffset arr0 off1)
+    else do
+      arr1 <- PM.resizeMutableByteArray arr0 sz1
+      off1 <- pasteST b arr1 off0
+      pure (MutableByteArrayOffset arr1 off1)
 
 -- | This function does not enforce the known upper bound on the
 -- size. It is up to the user to do this.
@@ -282,6 +310,11 @@ word16BE w = construct $ \arr off -> do
   writeByteArray arr (off    ) (fromIntegral @Word16 @Word8 (unsafeShiftR w 8))
   writeByteArray arr (off + 1) (fromIntegral @Word16 @Word8 w)
   pure (off + 2)
+
+word8 :: Word8 -> Builder 1
+word8 w = construct $ \arr off -> do
+  writeByteArray arr off w
+  pure (off + 1)
 
 -- Reverse the bytes in the designated slice. This takes
 -- an inclusive start offset and an inclusive end offset.
