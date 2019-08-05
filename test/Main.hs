@@ -71,6 +71,10 @@ tests = testGroup "Tests"
         pack ("0.5") @=? run 1 (doubleDec 0.5)
     , THU.testCase "doubleDec-I" $
         pack ("-0.5") @=? run 1 (doubleDec (-0.5))
+    , THU.testCase "doubleDec-J" $
+        pack ("999999999") @=? run 1 (doubleDec 999999999)
+    , THU.testCase "doubleDec-K" $
+        pack ("-99999999") @=? run 1 (doubleDec (-99999999))
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->
