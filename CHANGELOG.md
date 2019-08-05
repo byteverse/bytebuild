@@ -5,6 +5,8 @@
 * Correct a serious error in the implementation of `bytes`.
 * Make `pasteGrowST` accept an initial offset.
 * Add a `pasteGrowST` for length-indexed builders.
+* Add function for rendering floating-point numbers in a slightly
+  inaccurate way.
 
 ## 0.1.1.0 -- 2019-07-30
 

@@ -34,6 +34,9 @@ module Data.ByteArray.Builder.Small
   , word64BE
   , word32BE
   , word16BE
+    -- * Encode Floating-Point Types
+    -- ** Human-Readable
+  , doubleDec
   ) where
 
 import Control.Monad.Primitive
@@ -193,6 +196,13 @@ bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len 
 -- argument was zero.
 word64Dec :: Word64 -> Builder
 word64Dec w = fromUnsafe (Unsafe.word64Dec w)
+
+-- | Encode a double-floating-point number, using decimal notation or
+-- scientific notation depending on the magnitude. This has undefined
+-- behavior when representing @+inf@, @-inf@, and @NaN@. It will not
+-- crash, but the generated numbers will be nonsense.
+doubleDec :: Double -> Builder
+doubleDec w = fromUnsafe (Unsafe.doubleDec w)
 
 -- | Encodes a signed 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.

@@ -36,6 +36,8 @@ module Data.ByteArray.Builder.Small.Unsafe
   , word32BE
   , word16BE
   , word8
+    -- * Encode Floating-Point Types
+  , doubleDec
   ) where
 
 import Control.Monad.Primitive
@@ -50,6 +52,7 @@ import GHC.Int
 import Data.Kind
 import GHC.TypeLits (KnownNat,Nat,type (+),natVal')
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
+import Control.Monad (when)
 
 import qualified Data.Primitive as PM
 
@@ -125,6 +128,13 @@ append :: Builder n -> Builder m -> Builder (n + m)
 append (Builder f) (Builder g) =
   Builder $ \arr off0 s0 -> case f arr off0 s0 of
     (# s1, r #) -> g arr r s1
+
+-- | Encode a double-floating-point number, using decimal notation or
+-- scientific notation depending on the magnitude. This has undefined
+-- behavior when representing @+inf@, @-inf@, and @NaN@. It will not
+-- crash, but the generated numbers will be nonsense.
+doubleDec :: Double -> Builder 32
+doubleDec (D# d) = Builder (\arr off0 s0 -> doubleDec# d arr off0 s0)
 
 -- | Requires up to 19 bytes. Encodes an unsigned 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
@@ -339,3 +349,103 @@ unST (ST f) = f
 shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
 shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
   primitive_ (shrinkMutableByteArray# arr sz)
+
+-- This is adapted from androider's code in https://stackoverflow.com/a/7097567
+-- The checks for infinity and NaN have been removed. Note that this is a little
+-- inaccurate. This is very visible when encoding a number like 2.25, which
+-- is perfectly represented as a IEEE 754 floating point number but is goofed
+-- up by this function.
+-- If you modify this function, please take a took at the resulting core.
+-- It currently performs no boxing at all, and it would be nice to keep
+-- it that way.
+doubleDec# :: forall s.
+  Double# -> MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+{-# noinline doubleDec# #-}
+doubleDec# d# marr# off# s0 = unIntST s0 $ do
+  let marr = MutableByteArray marr#
+  let d0 = D# d#
+  let off0 = I# off#
+  if d0 == 0
+    then do
+      writeByteArray marr off0 (c2w '0')
+      pure (off0 + 1)
+    else do
+      let neg = d0 < 0
+      off1 <- if neg
+        then do
+          writeByteArray marr off0 (c2w '-')
+          pure (off0 + 1)
+        else pure off0
+      let d1 = abs d0
+      let mag0 = floor (logBase10 d1) :: Int
+      let useExp = (mag0 >= 14 || (neg && mag0 >= 9) || mag0 <= (-9))
+      -- This straightforward adaptation of the C code is awkward
+      -- in Haskell. Binding the triple where mag1 might not even
+      -- get used is strange.
+      let !(!d2,!mag1,!mag0A) = if useExp
+            then
+              let mag0' = if mag0 < 0 then mag0 - 1 else mag0
+               in (d1 / (10.0 ** fromIntegral @Int @Double mag0'), mag0', 0)
+            else (d1,0,mag0)
+      let mag0B = if mag0A < 1 then 0 else mag0A
+      let goNum :: Double -> Int -> Int -> ST s Int
+          goNum !dA0 !mag !offA0 = if (dA0 > doublePrecision || mag >= 0)
+            then do
+              let weight = 10.0 ** (fromIntegral @Int @Double mag)
+              -- We should actually check weight with isinf here,
+              -- but we do not.
+              (dA1,offA1) <- if weight > 0
+                then do
+                  -- TODO: use a better floor function
+                  let digit = ((floor :: Double -> Int) (dA0 / weight))
+                  let discard = fromIntegral @Int @Double digit * weight
+                  writeByteArray marr offA0
+                    (fromIntegral @Int @Word8 (digit + ord '0'))
+                  pure (dA0 - discard,offA0 + 1)
+                else pure (dA0,offA0)
+              offA2 <- if mag == 0 && dA1 > 0
+                then do
+                  writeByteArray marr offA1 (c2w '.')
+                  pure (offA1 + 1)
+                else pure offA1
+              goNum dA1 (mag - 1) offA2
+            else pure offA0
+      !off2 <- goNum d2 mag0B off1
+      off3 <- if useExp
+        then do
+          writeByteArray marr off2 (c2w 'e')
+          !mag2 <- if mag1 > 0
+            then do
+              writeByteArray marr (off2 + 1) (c2w '+')
+              pure mag1
+            else do
+              writeByteArray marr (off2 + 1) (c2w '-')
+              pure (-mag1)
+          let goMag !mag !off = if mag > 0
+                then do
+                  let (q,r) = quotRem mag 10
+                  writeByteArray marr off (fromIntegral @Int @Word8 (ord '0' + r))
+                  goMag q (off + 1)
+                else pure off
+          !off3 <- goMag mag2 (off2 + 2)
+          reverseBytes marr (off2 + 2) (off3 - 1)
+          pure off3
+        else pure off2
+      pure off3
+
+doublePrecision :: Double
+doublePrecision = 0.00000000000001
+
+unIntST :: State# s -> ST s Int -> (# State# s, Int# #)
+{-# inline unIntST #-}
+unIntST s0 (ST f) = case f s0 of
+  (# s1, I# i #) -> (# s1, i #)
+
+-- This is slightly inaccurate. I think this can actually cause
+-- problems in some situations. The log10 function from C would
+-- be better. The inaccuracy here cause the logarithm to be slightly
+-- larger than it should be. There might actually be a simple way to
+-- fix this by just using recursion to compute it. We just floor the
+-- result anyway. Hmm...
+logBase10 :: Double -> Double
+logBase10 d = log d / 2.30258509299

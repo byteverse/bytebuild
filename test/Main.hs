@@ -12,6 +12,7 @@ import Debug.Trace
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.QuickCheck ((===))
 import Text.Printf (printf)
+import Test.Tasty.HUnit ((@=?))
 import qualified Data.ByteString.Builder as BB
 import qualified Data.Primitive as PM
 import qualified Data.List as L
@@ -20,6 +21,7 @@ import qualified Test.Tasty.QuickCheck as TQC
 import qualified Test.QuickCheck as QC
 import qualified GHC.Exts as Exts
 import qualified Data.ByteString.Lazy.Char8 as LB
+import qualified Test.Tasty.HUnit as THU
 
 import qualified HexWord64
 
@@ -51,6 +53,24 @@ tests = testGroup "Tests"
         (runArray word64Dec (V.fromList xs))
         ===
         pack (foldMap show xs)
+    , THU.testCase "doubleDec-A" $
+        pack (show (2 :: Int)) @=? run 1 (doubleDec 2.0)
+    , THU.testCase "doubleDec-B" $
+        pack (show (2.5 :: Double)) @=? run 1 (doubleDec 2.5)
+    , THU.testCase "doubleDec-C" $
+        pack ("1e+15") @=? run 1 (doubleDec 1e15)
+    , THU.testCase "doubleDec-D" $
+        pack ("-42") @=? run 1 (doubleDec (-42))
+    , THU.testCase "doubleDec-E" $
+        pack ("-8.88888888888888e+14") @=? run 1 (doubleDec (-888888888888888.8888888))
+    , THU.testCase "doubleDec-F" $
+        pack ("42") @=? run 1 (doubleDec 42)
+    , THU.testCase "doubleDec-G" $
+        pack ("0") @=? run 1 (doubleDec 0)
+    , THU.testCase "doubleDec-H" $
+        pack ("0.5") @=? run 1 (doubleDec 0.5)
+    , THU.testCase "doubleDec-I" $
+        pack ("-0.5") @=? run 1 (doubleDec (-0.5))
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->
