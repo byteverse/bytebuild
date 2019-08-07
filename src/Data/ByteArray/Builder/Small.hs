@@ -22,9 +22,12 @@ module Data.ByteArray.Builder.Small
     -- * Materialized Byte Sequences
   , bytes
   , bytearray
+  , shortTextUtf8
+  , shortTextJsonString
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
+  , word16Dec
   , int64Dec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
@@ -50,7 +53,12 @@ import GHC.ST
 import GHC.Word
 import GHC.TypeLits (KnownNat,natVal')
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
+import Data.ByteString.Short.Internal (ShortByteString(SBS))
+import Data.Text.Short (ShortText)
+import Data.Char (ord)
 
+import qualified GHC.Exts as Exts
+import qualified Data.Text.Short as TS
 import qualified Data.Primitive as PM
 import qualified Data.Vector as V
 import qualified Data.ByteArray.Builder.Small.Unsafe as Unsafe
@@ -191,11 +199,72 @@ bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len 
     pure (Just (off + slen))
   else pure Nothing
 
+-- Internal function. Precondition, the referenced slice of the
+-- byte sequence is UTF-8 encoded text.
+slicedUtf8TextJson :: ByteArray# -> Int# -> Int# -> Builder
+{-# inline slicedUtf8TextJson #-}
+slicedUtf8TextJson !src# !soff0# !slen0# = construct $ \(MutableBytes dst doff0 dlen0) ->
+  let slen0 = I# slen0#
+   in if dlen0 > (2 * slen0) + 2
+        then do
+          PM.writeByteArray dst doff0 (c2w '"')
+          let go !soff !slen !doff = if slen > 0
+                then case indexChar8Array (ByteArray src#) soff of
+                  '\\' -> write2 dst doff '\\' '\\' *> go (soff + 1) (slen - 1) (doff + 2)
+                  '\"' -> write2 dst doff '\\' '\"' *> go (soff + 1) (slen - 1) (doff + 2)
+                  '\n' -> write2 dst doff '\\' 'n' *> go (soff + 1) (slen - 1) (doff + 2)
+                  '\r' -> write2 dst doff '\\' 'r' *> go (soff + 1) (slen - 1) (doff + 2)
+                  '\t' -> write2 dst doff '\\' 't' *> go (soff + 1) (slen - 1) (doff + 2)
+                  c -> if c >= '\x20'
+                    then PM.writeByteArray dst doff (c2w c) *> go (soff + 1) (slen - 1) (doff + 1)
+                    else do
+                      write2 dst doff '\\' 'u'
+                      doff' <- Unsafe.pasteST
+                        (Unsafe.word16PaddedUpperHex (fromIntegral (c2w c)))
+                        dst (doff + 2)
+                      go (soff + 1) (slen - 1) doff'
+                else pure doff
+          doffRes <- go (I# soff0#) (I# slen0#) (doff0 + 1)
+          PM.writeByteArray dst doffRes (c2w '"')
+          pure (Just (doffRes + 1))
+        else pure Nothing
+
+-- Internal. Write two characters in the ASCII plane to a byte array.
+write2 :: MutableByteArray s -> Int -> Char -> Char -> ST s ()
+write2 marr ix a b = do
+  PM.writeByteArray marr ix (c2w a)
+  PM.writeByteArray marr (ix + 1) (c2w b)
+
+-- | Create a builder from text. The text will be UTF-8 encoded.
+shortTextUtf8 :: ShortText -> Builder
+shortTextUtf8 a =
+  let ba = shortTextToByteArray a
+   in bytes (Bytes ba 0 (sizeofByteArray ba))
+
+-- | Create a builder from text. The text will be UTF-8 encoded,
+-- and JSON special characters will be escaped. Additionally, the
+-- result is surrounded by double quotes. For example:
+--
+-- * @foo ==> "foo"@
+-- * @\_"_/ ==> "\\_\"_/"@
+-- * @hello<ESC>world ==> "hello\u001Bworld"@ (where <LF> is code point 0x1B)
+shortTextJsonString :: ShortText -> Builder
+shortTextJsonString a =
+  let !(ByteArray ba) = shortTextToByteArray a
+      !(I# len) = PM.sizeofByteArray (ByteArray ba)
+   in slicedUtf8TextJson ba 0# len
+
 -- | Encodes an unsigned 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the
 -- argument was zero.
 word64Dec :: Word64 -> Builder
 word64Dec w = fromUnsafe (Unsafe.word64Dec w)
+
+-- | Encodes an unsigned 16-bit integer as decimal.
+-- This encoding never starts with a zero unless the
+-- argument was zero.
+word16Dec :: Word16 -> Builder
+word16Dec w = fromUnsafe (Unsafe.word16Dec w)
 
 -- | Encode a double-floating-point number, using decimal notation or
 -- scientific notation depending on the magnitude. This has undefined
@@ -260,3 +329,14 @@ word32BE w = fromUnsafe (Unsafe.word32BE w)
 -- word in a big-endian fashion.
 word16BE :: Word16 -> Builder
 word16BE w = fromUnsafe (Unsafe.word16BE w)
+
+-- ShortText is already UTF-8 encoded. This is a no-op.
+shortTextToByteArray :: ShortText -> ByteArray
+shortTextToByteArray x = case TS.toShortByteString x of
+  SBS a -> ByteArray a
+
+indexChar8Array :: ByteArray -> Int -> Char
+indexChar8Array (ByteArray b) (I# i) = C# (Exts.indexCharArray# b i)
+
+c2w :: Char -> Word8
+c2w = fromIntegral . ord 

@@ -26,6 +26,7 @@ module Data.ByteArray.Builder.Small.Unsafe
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
+  , word16Dec
   , int64Dec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
@@ -139,7 +140,12 @@ doubleDec (D# d) = Builder (\arr off0 s0 -> doubleDec# d arr off0 s0)
 -- | Requires up to 19 bytes. Encodes an unsigned 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 word64Dec :: Word64 -> Builder 19
-word64Dec (W64# w) = word64Dec# w
+word64Dec (W64# w) = wordCommonDec# w
+
+-- | Requires up to 19 bytes. Encodes an unsigned 64-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+word16Dec :: Word16 -> Builder 5
+word16Dec (W16# w) = wordCommonDec# w
 
 -- | Requires up to 20 bytes. Encodes a signed 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
@@ -148,10 +154,11 @@ word64Dec (W64# w) = word64Dec# w
 int64Dec :: Int64 -> Builder 20
 int64Dec (I64# w) = int64Dec# w
 
--- | Requires up to 19 bytes.
-word64Dec# :: Word# -> Builder 19
-{-# noinline word64Dec# #-}
-word64Dec# w# = construct $ \arr off0 -> if w /= 0
+-- Requires a number of bytes that is bounded by the size of
+-- the word. This is only used internally.
+wordCommonDec# :: Word# -> Builder n
+{-# noinline wordCommonDec# #-}
+wordCommonDec# w# = construct $ \arr off0 -> if w /= 0
   then internalWordLoop arr off0 (W# w#)
   else do
     writeByteArray arr off0 (c2w '0')
@@ -353,7 +360,7 @@ shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
 -- This is adapted from androider's code in https://stackoverflow.com/a/7097567
 -- The checks for infinity and NaN have been removed. Note that this is a little
 -- inaccurate. This is very visible when encoding a number like 2.25, which
--- is perfectly represented as a IEEE 754 floating point number but is goofed
+-- is perfectly represented as an IEEE 754 floating point number but is goofed
 -- up by this function.
 -- If you modify this function, please take a took at the resulting core.
 -- It currently performs no boxing at all, and it would be nice to keep

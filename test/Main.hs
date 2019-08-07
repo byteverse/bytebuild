@@ -1,6 +1,7 @@
 {-# language BangPatterns #-}
 {-# language ScopedTypeVariables #-}
 {-# language TypeApplications #-}
+{-# language OverloadedStrings #-}
 
 import Control.Monad.ST (runST)
 import Data.Bytes.Types (MutableBytes(..))
@@ -75,6 +76,14 @@ tests = testGroup "Tests"
         pack ("999999999") @=? run 1 (doubleDec 999999999)
     , THU.testCase "doubleDec-K" $
         pack ("-99999999") @=? run 1 (doubleDec (-99999999))
+    , THU.testCase "shortTextJsonString-A" $
+        pack ("\"hello\"") @=? run 1 (shortTextJsonString "hello")
+    , THU.testCase "shortTextJsonString-B" $
+        pack ("\"\\\\_\\\"_/\"") @=? run 1 (shortTextJsonString "\\_\"_/")
+    , THU.testCase "shortTextJsonString-C" $
+        pack ("\"Hi\\r\\nLo\"") @=? run 1 (shortTextJsonString "Hi\r\nLo")
+    , THU.testCase "shortTextJsonString-D" $
+        pack ("\"Hi\\u001BLo\"") @=? run 1 (shortTextJsonString "Hi\ESCLo")
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->

@@ -7,6 +7,8 @@
 * Add a `pasteGrowST` for length-indexed builders.
 * Add function for rendering floating-point numbers in a slightly
   inaccurate way.
+* Add `word16Dec`.
+* Add functions for encoding `ShortText` as UTF-8 and as a JSON string.
 
 ## 0.1.1.0 -- 2019-07-30
 
