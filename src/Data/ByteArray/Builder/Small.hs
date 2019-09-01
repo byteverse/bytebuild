@@ -27,6 +27,7 @@ module Data.ByteArray.Builder.Small
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
+  , word32Dec
   , word16Dec
   , int64Dec
   , word64PaddedUpperHex
@@ -79,6 +80,9 @@ instance Semigroup Builder where
 
 instance Monoid Builder where
   mempty = Builder $ \_ off0 _ s0 -> (# s0, off0 #)
+
+instance IsString Builder where
+  fromString = shortTextUtf8 . TS.fromString
 
 -- | Run a builder. An accurate size hint is important for good performance.
 -- The size hint should be slightly larger than the actual size.
@@ -259,6 +263,12 @@ shortTextJsonString a =
 -- argument was zero.
 word64Dec :: Word64 -> Builder
 word64Dec w = fromUnsafe (Unsafe.word64Dec w)
+
+-- | Encodes an unsigned 16-bit integer as decimal.
+-- This encoding never starts with a zero unless the
+-- argument was zero.
+word32Dec :: Word32 -> Builder
+word32Dec w = fromUnsafe (Unsafe.word32Dec w)
 
 -- | Encodes an unsigned 16-bit integer as decimal.
 -- This encoding never starts with a zero unless the

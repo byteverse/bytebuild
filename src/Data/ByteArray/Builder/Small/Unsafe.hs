@@ -26,6 +26,7 @@ module Data.ByteArray.Builder.Small.Unsafe
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
+  , word32Dec
   , word16Dec
   , int64Dec
   , word64PaddedUpperHex
@@ -142,7 +143,12 @@ doubleDec (D# d) = Builder (\arr off0 s0 -> doubleDec# d arr off0 s0)
 word64Dec :: Word64 -> Builder 19
 word64Dec (W64# w) = wordCommonDec# w
 
--- | Requires up to 19 bytes. Encodes an unsigned 64-bit integer as decimal.
+-- | Requires up to 10 bytes. Encodes an unsigned 32-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+word32Dec :: Word32 -> Builder 10
+word32Dec (W32# w) = wordCommonDec# w
+
+-- | Requires up to 5 bytes. Encodes an unsigned 16-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 word16Dec :: Word16 -> Builder 5
 word16Dec (W16# w) = wordCommonDec# w
