@@ -22,6 +22,7 @@ module Data.ByteArray.Builder.Small.Bounded
   , pasteGrowST
   , pasteIO
     -- * Combine
+  , empty
   , append
     -- * Bounds Manipulation
   , (<=)
@@ -135,6 +136,10 @@ construct f = Builder
       (# s1, (I# n) #) -> (# s1, n #)
 
 infixr 9 `append`
+
+-- | The monoidal unit of `append`
+empty :: Builder 0
+empty = Builder $ \_ off0 s0 -> (# s0, off0 #)
 
 -- | Concatenate two builders.
 append :: Builder n -> Builder m -> Builder (n + m)
