@@ -1,8 +1,9 @@
-{-# language GADTSyntax #-}
+{-# language GADTs #-}
 {-# language KindSignatures #-}
 {-# language ScopedTypeVariables #-}
 {-# language BangPatterns #-}
 {-# language MagicHash #-}
+{-# language BinaryLiterals #-}
 {-# language UnboxedTuples #-}
 {-# language RankNTypes #-}
 {-# language LambdaCase #-}
@@ -10,9 +11,8 @@
 {-# language DataKinds #-}
 {-# language TypeApplications #-}
 
--- | The functions in this module do not check to
--- see if there is enough space in the buffer.
-module Data.ByteArray.Builder.Small.Unsafe
+-- | The functions in this module are explict in the amount of bytes they require.
+module Data.ByteArray.Builder.Small.Bounded
   ( -- * Builder
     Builder(..)
   , construct
@@ -23,6 +23,11 @@ module Data.ByteArray.Builder.Small.Unsafe
   , pasteIO
     -- * Combine
   , append
+    -- * Bounds Manipulation
+  , (<=)
+  , lessThanEqual
+  , isLessThanEqual
+  , raise
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
@@ -33,6 +38,8 @@ module Data.ByteArray.Builder.Small.Unsafe
   , word32PaddedUpperHex
   , word16PaddedUpperHex
   , word8PaddedUpperHex
+  , ascii
+  , char
     -- ** Machine-Readable
   , word64BE
   , word32BE
@@ -53,8 +60,9 @@ import GHC.Word
 import GHC.Int
 import Data.Kind
 import GHC.TypeLits (KnownNat,Nat,type (+),natVal')
+import qualified GHC.TypeLits as GHC
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
-import Control.Monad (when)
+import qualified Control.Category as Cat
 
 import qualified Data.Primitive as PM
 
@@ -65,13 +73,16 @@ newtype Builder :: Nat -> Type where
         (forall s. MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #))
      -> Builder n
 
+knownNat :: KnownNat n => Proxy# n -> Int
+knownNat p = fromIntegral (natVal' p)
+
 -- | Execute the builder. This function is safe.
 run :: forall n. KnownNat n
   => Builder n -- ^ Builder
   -> ByteArray
 {-# inline run #-}
 run b = runST $ do
-  arr <- newByteArray (fromIntegral (natVal' (proxy# :: Proxy# n)))
+  arr <- newByteArray (knownNat (proxy# :: Proxy# n))
   len <- pasteST b arr 0
   shrinkMutableByteArray arr len
   unsafeFreezeByteArray arr
@@ -96,7 +107,7 @@ pasteGrowST :: forall n s. KnownNat n
 {-# inline pasteGrowST #-}
 pasteGrowST b !(MutableByteArrayOffset{array=arr0,offset=off0}) = do
   sz0 <- PM.getSizeofMutableByteArray arr0
-  let req = fromIntegral (natVal' (proxy# :: Proxy# n))
+  let req = knownNat (proxy# :: Proxy# n)
   let sz1 = off0 + req
   if sz1 <= sz0
     then do
@@ -130,6 +141,33 @@ append :: Builder n -> Builder m -> Builder (n + m)
 append (Builder f) (Builder g) =
   Builder $ \arr off0 s0 -> case f arr off0 s0 of
     (# s1, r #) -> g arr r s1
+
+-- | A proof that n is less than or equal to m
+newtype (n :: Nat) <= (m :: Nat) = LessThanEqual Int -- m - n
+
+instance Cat.Category (<=) where
+  id = LessThanEqual 0
+  -- b <= c (c - b) -> a <= b (b - a) -> a <= c (c - a)
+  LessThanEqual cb . LessThanEqual ba = LessThanEqual (cb + ba)
+
+-- | Dynamically check than 'n' is less than or equal to 'm'
+isLessThanEqual :: (KnownNat n, KnownNat m) => Proxy# n -> Proxy# m -> Maybe (n <= m)
+isLessThanEqual n m = if 0 <= diff then Just (LessThanEqual diff) else Nothing
+  where diff = knownNat m - knownNat n
+
+-- | Statically check than 'n' is less than or equal to 'm'. 'n' and 'm' must be known at compile time.
+lessThanEqual :: forall n m. (KnownNat n, KnownNat m, n GHC.<= m) => n <= m
+lessThanEqual = LessThanEqual (knownNat (proxy# :: Proxy# m) - knownNat (proxy# :: Proxy# n))
+
+-- | Weaken the bound on the maximum number of bytes required.
+-- >>> :{
+-- buildNumber :: Either Double Word64 -> Builder 32
+-- buildNumber = \case
+--   Left d  -> doubleDec d
+--   Right w -> raise lessThanEqual (word64Dec w)
+-- :}
+raise :: forall m n. n <= m -> Builder n -> Builder m
+raise !_ (Builder f) = Builder f
 
 -- | Encode a double-floating-point number, using decimal notation or
 -- scientific notation depending on the magnitude. This has undefined
@@ -301,6 +339,76 @@ word8PaddedUpperHex# w# = construct $ \arr off -> do
   pure (off + 2)
   where
   w = W# w#
+
+-- | Encode an ASCII char.
+-- Precondition: Input must be an ASCII character. This is not checked.
+ascii :: Char -> Builder 1
+ascii c = word8 (fromIntegral @Int @Word8 (ord c))
+
+-- | Encode an UTF8 char. This only uses as much space as is required.
+char :: Char -> Builder 4
+char c
+  | codepoint < 0x80 = construct $ \arr off -> do
+      writeByteArray arr off (unsafeWordToWord8 codepoint)
+      pure (off + 1)
+  | codepoint < 0x800 = construct $ \arr off -> do
+      writeByteArray arr off       (unsafeWordToWord8 (byteTwoOne codepoint))
+      writeByteArray arr (off + 1) (unsafeWordToWord8 (byteTwoTwo codepoint))
+      return (off + 2)
+  | codepoint >= 0xD800 && codepoint < 0xE000 = construct $ \arr off -> do
+      -- Codepoint U+FFFD
+      writeByteArray arr off       (0xEF :: Word8)
+      writeByteArray arr (off + 1) (0xBF :: Word8)
+      writeByteArray arr (off + 2) (0xBD :: Word8)
+      return (off + 3)
+  | codepoint < 0x10000 = construct $ \arr off -> do
+      writeByteArray arr off       (unsafeWordToWord8 (byteThreeOne codepoint))
+      writeByteArray arr (off + 1) (unsafeWordToWord8 (byteThreeTwo codepoint))
+      writeByteArray arr (off + 2) (unsafeWordToWord8 (byteThreeThree codepoint))
+      return (off + 3)
+  | otherwise = construct $ \arr off -> do
+      writeByteArray arr off       (unsafeWordToWord8 (byteFourOne codepoint))
+      writeByteArray arr (off + 1) (unsafeWordToWord8 (byteFourTwo codepoint))
+      writeByteArray arr (off + 2) (unsafeWordToWord8 (byteFourThree codepoint))
+      writeByteArray arr (off + 3) (unsafeWordToWord8 (byteFourFour codepoint))
+      return (off + 4)
+
+  where
+    codepoint :: Word
+    codepoint = fromIntegral (ord c)
+
+    unsafeWordToWord8 :: Word -> Word8
+    unsafeWordToWord8 (W# w) = W8# w
+
+    -- precondition: codepoint is less than 0x800
+    byteTwoOne :: Word -> Word
+    byteTwoOne w = unsafeShiftR w 6 .|. 0b11000000
+
+    byteTwoTwo :: Word -> Word
+    byteTwoTwo w = (w .&. 0b00111111) .|. 0b10000000
+
+    -- precondition: codepoint is less than 0x1000
+    byteThreeOne :: Word -> Word
+    byteThreeOne w = unsafeShiftR w 12 .|. 0b11100000
+
+    byteThreeTwo :: Word -> Word
+    byteThreeTwo w = (0b00111111 .&. unsafeShiftR w 6) .|. 0b10000000
+
+    byteThreeThree :: Word -> Word
+    byteThreeThree w = (w .&. 0b00111111) .|. 0b10000000
+
+    -- precondition: codepoint is less than 0x110000
+    byteFourOne :: Word -> Word
+    byteFourOne w = unsafeShiftR w 18 .|. 0b11110000
+
+    byteFourTwo :: Word -> Word
+    byteFourTwo w = (0b00111111 .&. unsafeShiftR w 12) .|. 0b10000000
+
+    byteFourThree :: Word -> Word
+    byteFourThree w = (0b00111111 .&. unsafeShiftR w 6) .|. 0b10000000
+
+    byteFourFour :: Word -> Word
+    byteFourFour w = (0b00111111 .&. w) .|. 0b10000000
 
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a big-endian fashion.

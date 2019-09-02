@@ -37,7 +37,7 @@ flag checked
 library
   exposed-modules:
     Data.ByteArray.Builder.Small
-    Data.ByteArray.Builder.Small.Unsafe
+    Data.ByteArray.Builder.Small.Bounded
   build-depends:
     , base >=4.12.0.0 && <5
     , byteslice >=0.1 && <0.2
