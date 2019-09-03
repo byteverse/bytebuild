@@ -5,24 +5,27 @@
 
 import Control.Monad.ST (runST)
 import Data.Bytes.Types (MutableBytes(..))
-import Data.ByteArray.Builder.Small
+import Data.ByteArray.Builder
 import Data.Word
 import Data.Char (ord)
 import Data.Primitive (ByteArray)
-import Debug.Trace
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.QuickCheck ((===))
 import Text.Printf (printf)
 import Test.Tasty.HUnit ((@=?))
+
+import qualified Arithmetic.Nat as Nat
+import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as BB
-import qualified Data.Primitive as PM
-import qualified Data.List as L
-import qualified Data.Vector as V
-import qualified Test.Tasty.QuickCheck as TQC
-import qualified Test.QuickCheck as QC
-import qualified GHC.Exts as Exts
 import qualified Data.ByteString.Lazy.Char8 as LB
+import qualified Data.List as L
+import qualified Data.Primitive as PM
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import qualified Data.Vector as V
+import qualified GHC.Exts as Exts
 import qualified Test.Tasty.HUnit as THU
+import qualified Test.Tasty.QuickCheck as TQC
 
 import qualified HexWord64
 
@@ -54,6 +57,9 @@ tests = testGroup "Tests"
         (runArray word64Dec (V.fromList xs))
         ===
         pack (foldMap show xs)
+    , THU.testCase "stringUtf8" $
+        packUtf8 "¿Cómo estás? I am doing well." @=?
+          run 1 (stringUtf8 "¿Cómo estás? I am doing well.")
     , THU.testCase "doubleDec-A" $
         pack (show (2 :: Int)) @=? run 1 (doubleDec 2.0)
     , THU.testCase "doubleDec-B" $
@@ -88,8 +94,8 @@ tests = testGroup "Tests"
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->
         run 1
-          (  fromUnsafe (HexWord64.word64PaddedUpperHex x)
-          <> fromUnsafe (HexWord64.word64PaddedUpperHex y)
+          (  fromBounded Nat.constant (HexWord64.word64PaddedUpperHex x)
+          <> fromBounded Nat.constant (HexWord64.word64PaddedUpperHex y)
           )
         ===
         pack (showWord64PaddedUpperHex x <> showWord64PaddedUpperHex y)
@@ -98,6 +104,9 @@ tests = testGroup "Tests"
 
 pack :: String -> ByteArray
 pack = Exts.fromList . map (fromIntegral @Int @Word8 . ord)
+
+packUtf8 :: String -> ByteArray
+packUtf8 = Exts.fromList . ByteString.unpack . TE.encodeUtf8 . T.pack
 
 -- This is used to test pasteArrayST
 runArray ::

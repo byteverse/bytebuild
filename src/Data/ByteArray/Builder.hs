@@ -6,11 +6,11 @@
 {-# language ScopedTypeVariables #-}
 {-# language UnboxedTuples #-}
 
-module Data.ByteArray.Builder.Small
-  ( -- * Unsafe Primitives
+module Data.ByteArray.Builder
+  ( -- * Bounded Primitives
     Builder(..)
   , construct
-  , fromUnsafe
+  , fromBounded
     -- * Evaluation
   , run
   , pasteST
@@ -24,6 +24,8 @@ module Data.ByteArray.Builder.Small
   , bytearray
   , shortTextUtf8
   , shortTextJsonString
+  , cstring
+  , stringUtf8
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
@@ -34,10 +36,13 @@ module Data.ByteArray.Builder.Small
   , word32PaddedUpperHex
   , word16PaddedUpperHex
   , word8PaddedUpperHex
+  , ascii
+  , char
     -- ** Machine-Readable
   , word64BE
   , word32BE
   , word16BE
+  , word8
     -- * Encode Floating-Point Types
     -- ** Human-Readable
   , doubleDec
@@ -46,43 +51,27 @@ module Data.ByteArray.Builder.Small
 import Control.Monad.Primitive
 import Control.Monad.ST
 import Control.Monad.ST.Run (runByteArrayST)
-import Data.Bytes.Types
-import Data.Primitive
-import Data.Int (Int64)
-import GHC.Exts
-import GHC.ST
-import GHC.Word
-import GHC.TypeLits (KnownNat,natVal')
-import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
+import Data.ByteArray.Builder.Unsafe (Builder(Builder))
+import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
-import Data.Text.Short (ShortText)
+import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
 import Data.Char (ord)
+import Data.Int (Int64)
+import Data.Primitive
+import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
+import Data.Text.Short (ShortText)
+import GHC.Exts
+import GHC.ST (ST(ST))
+import GHC.Word
 
+import qualified Arithmetic.Nat as Nat
+import qualified Arithmetic.Types as Arithmetic
 import qualified GHC.Exts as Exts
 import qualified Data.Text.Short as TS
 import qualified Data.Primitive as PM
 import qualified Data.Vector as V
-import qualified Data.ByteArray.Builder.Small.Unsafe as Unsafe
-
--- | An unmaterialized sequence of bytes that may be pasted
--- into a mutable byte array.
-newtype Builder = Builder
-  -- This functions takes an offset and a number of remaining bytes
-  -- and returns the new offset.
-  (forall s. MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #))
-
-instance Semigroup Builder where
-  {-# inline (<>) #-}
-  Builder f <> Builder g = Builder $ \arr off0 len0 s0 -> case f arr off0 len0 s0 of
-    (# s1, r #) -> case r /=# (-1#) of
-      1# -> g arr r (len0 +# (off0 -# r)) s1
-      _ -> (# s1, (-1#) #)
-
-instance Monoid Builder where
-  mempty = Builder $ \_ off0 _ s0 -> (# s0, off0 #)
-
-instance IsString Builder where
-  fromString = shortTextUtf8 . TS.fromString
+import qualified Data.ByteArray.Builder.Bounded as Bounded
+import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
 
 -- | Run a builder. An accurate size hint is important for good performance.
 -- The size hint should be slightly larger than the actual size.
@@ -98,7 +87,7 @@ run hint b = runByteArrayST $ do
           Just len -> do
             shrinkMutableByteArray arr len
             unsafeFreezeByteArray arr
-  go hint
+  go (max hint 1)
 
 -- | Variant of 'pasteArrayST' that runs in 'IO'.
 pasteArrayIO ::
@@ -183,13 +172,19 @@ construct f = Builder
         Nothing -> (# s1, (-1#) #)
         Just (I# n) -> (# s1, n #)
 
-fromUnsafe :: forall n. KnownNat n => Unsafe.Builder n -> Builder
-{-# inline fromUnsafe #-}
-fromUnsafe (Unsafe.Builder f) = Builder $ \arr off len s0 ->
-  case fromIntegral (natVal' (proxy# :: Proxy# n)) of
-    I# req -> case len >=# req of
-      1# -> f arr off s0
-      _ -> (# s0, (-1#) #)
+-- | Convert a bounded builder to an unbounded one. If the size
+-- is a constant, use @Arithmetic.Nat.constant@ as the first argument
+-- to let GHC conjure up this value for you.
+fromBounded ::
+     Arithmetic.Nat n
+  -> Bounded.Builder n
+  -> Builder
+{-# inline fromBounded #-}
+fromBounded n (UnsafeBounded.Builder f) = Builder $ \arr off len s0 ->
+  let !(I# req) = Nat.demote n in
+  case len >=# req of
+    1# -> f arr off s0
+    _ -> (# s0, (-1#) #)
 
 -- | Create a builder from an unsliced byte sequence.
 bytearray :: ByteArray -> Builder
@@ -223,8 +218,8 @@ slicedUtf8TextJson !src# !soff0# !slen0# = construct $ \(MutableBytes dst doff0 
                     then PM.writeByteArray dst doff (c2w c) *> go (soff + 1) (slen - 1) (doff + 1)
                     else do
                       write2 dst doff '\\' 'u'
-                      doff' <- Unsafe.pasteST
-                        (Unsafe.word16PaddedUpperHex (fromIntegral (c2w c)))
+                      doff' <- UnsafeBounded.pasteST
+                        (Bounded.word16PaddedUpperHex (fromIntegral (c2w c)))
                         dst (doff + 2)
                       go (soff + 1) (slen - 1) doff'
                 else pure doff
@@ -262,61 +257,70 @@ shortTextJsonString a =
 -- This encoding never starts with a zero unless the
 -- argument was zero.
 word64Dec :: Word64 -> Builder
-word64Dec w = fromUnsafe (Unsafe.word64Dec w)
+word64Dec w = fromBounded Nat.constant (Bounded.word64Dec w)
 
 -- | Encodes an unsigned 16-bit integer as decimal.
 -- This encoding never starts with a zero unless the
 -- argument was zero.
 word32Dec :: Word32 -> Builder
-word32Dec w = fromUnsafe (Unsafe.word32Dec w)
+word32Dec w = fromBounded Nat.constant (Bounded.word32Dec w)
 
 -- | Encodes an unsigned 16-bit integer as decimal.
 -- This encoding never starts with a zero unless the
 -- argument was zero.
 word16Dec :: Word16 -> Builder
-word16Dec w = fromUnsafe (Unsafe.word16Dec w)
+word16Dec w = fromBounded Nat.constant (Bounded.word16Dec w)
 
 -- | Encode a double-floating-point number, using decimal notation or
 -- scientific notation depending on the magnitude. This has undefined
 -- behavior when representing @+inf@, @-inf@, and @NaN@. It will not
 -- crash, but the generated numbers will be nonsense.
 doubleDec :: Double -> Builder
-doubleDec w = fromUnsafe (Unsafe.doubleDec w)
+doubleDec w = fromBounded Nat.constant (Bounded.doubleDec w)
 
 -- | Encodes a signed 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 -- Negative numbers are preceded by a minus sign. Positive numbers
 -- are not preceded by anything.
 int64Dec :: Int64 -> Builder
-int64Dec w = fromUnsafe (Unsafe.int64Dec w)
+int64Dec w = fromBounded Nat.constant (Bounded.int64Dec w)
 
 -- | Encode a 64-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 16 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 1022 as @00000000000003FE@.
 word64PaddedUpperHex :: Word64 -> Builder
 word64PaddedUpperHex w =
-  fromUnsafe (Unsafe.word64PaddedUpperHex w)
+  fromBounded Nat.constant (Bounded.word64PaddedUpperHex w)
 
 -- | Encode a 32-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 8 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 1022 as @000003FE@.
 word32PaddedUpperHex :: Word32 -> Builder
 word32PaddedUpperHex w =
-  fromUnsafe (Unsafe.word32PaddedUpperHex w)
+  fromBounded Nat.constant (Bounded.word32PaddedUpperHex w)
 
 -- | Encode a 16-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 4 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 1022 as @03FE@.
 word16PaddedUpperHex :: Word16 -> Builder
 word16PaddedUpperHex w =
-  fromUnsafe (Unsafe.word16PaddedUpperHex w)
+  fromBounded Nat.constant (Bounded.word16PaddedUpperHex w)
 
 -- | Encode a 8-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 2 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 11 as @0B@.
 word8PaddedUpperHex :: Word8 -> Builder
 word8PaddedUpperHex w =
-  fromUnsafe (Unsafe.word8PaddedUpperHex w)
+  fromBounded Nat.constant (Bounded.word8PaddedUpperHex w)
+
+-- | Encode an ASCII char.
+-- Precondition: Input must be an ASCII character. This is not checked.
+ascii :: Char -> Builder
+ascii c = fromBounded Nat.constant (Bounded.char c)
+
+-- | Encode an UTF8 char. This only uses as much space as is required.
+char :: Char -> Builder
+char c = fromBounded Nat.constant (Bounded.char c)
 
 unST :: ST s a -> State# s -> (# State# s, a #)
 unST (ST f) = f
@@ -328,17 +332,20 @@ shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a big-endian fashion.
 word64BE :: Word64 -> Builder
-word64BE w = fromUnsafe (Unsafe.word64BE w)
+word64BE w = fromBounded Nat.constant (Bounded.word64BE w)
 
 -- | Requires exactly 4 bytes. Dump the octets of a 32-bit
 -- word in a big-endian fashion.
 word32BE :: Word32 -> Builder
-word32BE w = fromUnsafe (Unsafe.word32BE w)
+word32BE w = fromBounded Nat.constant (Bounded.word32BE w)
 
 -- | Requires exactly 2 bytes. Dump the octets of a 16-bit
 -- word in a big-endian fashion.
 word16BE :: Word16 -> Builder
-word16BE w = fromUnsafe (Unsafe.word16BE w)
+word16BE w = fromBounded Nat.constant (Bounded.word16BE w)
+
+word8 :: Word8 -> Builder
+word8 w = fromBounded Nat.constant (Bounded.word8 w)
 
 -- ShortText is already UTF-8 encoded. This is a no-op.
 shortTextToByteArray :: ShortText -> ByteArray
@@ -349,4 +356,4 @@ indexChar8Array :: ByteArray -> Int -> Char
 indexChar8Array (ByteArray b) (I# i) = C# (Exts.indexCharArray# b i)
 
 c2w :: Char -> Word8
-c2w = fromIntegral . ord 
+c2w = fromIntegral . ord
