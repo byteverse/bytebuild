@@ -28,7 +28,9 @@ module Data.ByteArray.Builder.Small
     -- ** Human-Readable
   , word64Dec
   , word16Dec
+  , word8Dec
   , int64Dec
+  , intDec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
   , word16PaddedUpperHex
@@ -179,6 +181,7 @@ construct f = Builder
         Nothing -> (# s1, (-1#) #)
         Just (I# n) -> (# s1, n #)
 
+-- | Create a builder from an bounded builder.
 fromUnsafe :: forall n. KnownNat n => Unsafe.Builder n -> Builder
 {-# inline fromUnsafe #-}
 fromUnsafe (Unsafe.Builder f) = Builder $ \arr off len s0 ->
@@ -266,6 +269,12 @@ word64Dec w = fromUnsafe (Unsafe.word64Dec w)
 word16Dec :: Word16 -> Builder
 word16Dec w = fromUnsafe (Unsafe.word16Dec w)
 
+-- | Encodes an unsigned 16-bit integer as decimal.
+-- This encoding never starts with a zero unless the
+-- argument was zero.
+word8Dec :: Word8 -> Builder
+word8Dec w = fromUnsafe (Unsafe.word8Dec w)
+
 -- | Encode a double-floating-point number, using decimal notation or
 -- scientific notation depending on the magnitude. This has undefined
 -- behavior when representing @+inf@, @-inf@, and @NaN@. It will not
@@ -279,6 +288,13 @@ doubleDec w = fromUnsafe (Unsafe.doubleDec w)
 -- are not preceded by anything.
 int64Dec :: Int64 -> Builder
 int64Dec w = fromUnsafe (Unsafe.int64Dec w)
+
+-- | Encodes a signed machine-sized integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+intDec :: Int -> Builder
+intDec w = fromUnsafe (Unsafe.intDec w)
 
 -- | Encode a 64-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 16 digits. This uses uppercase for the alphabetical

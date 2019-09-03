@@ -1,14 +1,14 @@
+{-# language BangPatterns #-}
+{-# language DataKinds #-}
 {-# language GADTSyntax #-}
 {-# language KindSignatures #-}
-{-# language ScopedTypeVariables #-}
-{-# language BangPatterns #-}
-{-# language MagicHash #-}
-{-# language UnboxedTuples #-}
-{-# language RankNTypes #-}
 {-# language LambdaCase #-}
-{-# language TypeOperators #-}
-{-# language DataKinds #-}
+{-# language MagicHash #-}
+{-# language RankNTypes #-}
+{-# language ScopedTypeVariables #-}
 {-# language TypeApplications #-}
+{-# language TypeOperators #-}
+{-# language UnboxedTuples #-}
 
 -- | The functions in this module do not check to
 -- see if there is enough space in the buffer.
@@ -27,7 +27,9 @@ module Data.ByteArray.Builder.Small.Unsafe
     -- ** Human-Readable
   , word64Dec
   , word16Dec
+  , word8Dec
   , int64Dec
+  , intDec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
   , word16PaddedUpperHex
@@ -53,7 +55,7 @@ import GHC.Int
 import Data.Kind
 import GHC.TypeLits (KnownNat,Nat,type (+),natVal')
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
-import Control.Monad (when)
+import Control.Monad.ST.Run (runByteArrayST)
 
 import qualified Data.Primitive as PM
 
@@ -69,7 +71,7 @@ run :: forall n. KnownNat n
   => Builder n -- ^ Builder
   -> ByteArray
 {-# inline run #-}
-run b = runST $ do
+run b = runByteArrayST $ do
   arr <- newByteArray (fromIntegral (natVal' (proxy# :: Proxy# n)))
   len <- pasteST b arr 0
   shrinkMutableByteArray arr len
@@ -142,10 +144,15 @@ doubleDec (D# d) = Builder (\arr off0 s0 -> doubleDec# d arr off0 s0)
 word64Dec :: Word64 -> Builder 19
 word64Dec (W64# w) = wordCommonDec# w
 
--- | Requires up to 19 bytes. Encodes an unsigned 64-bit integer as decimal.
+-- | Requires up to 5 bytes. Encodes an unsigned 16-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 word16Dec :: Word16 -> Builder 5
 word16Dec (W16# w) = wordCommonDec# w
+
+-- | Requires up to 3 bytes. Encodes an unsigned 8-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+word8Dec :: Word8 -> Builder 3
+word8Dec (W8# w) = wordCommonDec# w
 
 -- | Requires up to 20 bytes. Encodes a signed 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
@@ -153,6 +160,13 @@ word16Dec (W16# w) = wordCommonDec# w
 -- are not preceded by anything.
 int64Dec :: Int64 -> Builder 20
 int64Dec (I64# w) = int64Dec# w
+
+-- | Requires up to 20 bytes. Encodes a signed machine-sized integer
+-- as decimal. This encoding never starts with a zero unless the
+-- argument was zero. Negative numbers are preceded by a minus sign.
+-- Positive numbers are not preceded by anything.
+intDec :: Int -> Builder 20
+intDec (I# w) = int64Dec# w
 
 -- Requires a number of bytes that is bounded by the size of
 -- the word. This is only used internally.
