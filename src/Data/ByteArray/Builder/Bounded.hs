@@ -1,4 +1,3 @@
-{-# language GADTs #-}
 {-# language KindSignatures #-}
 {-# language ScopedTypeVariables #-}
 {-# language BangPatterns #-}
@@ -12,23 +11,18 @@
 {-# language TypeApplications #-}
 
 -- | The functions in this module are explict in the amount of bytes they require.
-module Data.ByteArray.Builder.Small.Bounded
+module Data.ByteArray.Builder.Bounded
   ( -- * Builder
-    Builder(..)
-  , construct
+    Builder
     -- * Execute
   , run
-  , pasteST
   , pasteGrowST
-  , pasteIO
     -- * Combine
   , empty
   , append
     -- * Bounds Manipulation
-  , (<=)
-  , lessThanEqual
-  , isLessThanEqual
-  , raise
+  , weaken
+  , substitute
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
@@ -56,45 +50,32 @@ import Data.Bits
 import Data.Char (ord)
 import Data.Primitive
 import GHC.Exts
-import GHC.ST
-import GHC.Word
-import GHC.Int
-import Data.Kind
-import GHC.TypeLits (KnownNat,Nat,type (+),natVal')
-import qualified GHC.TypeLits as GHC
+import GHC.ST (ST(ST))
+import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
+import GHC.Int (Int64(I64#))
+import GHC.TypeLits (KnownNat,type (+),natVal')
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
-import qualified Control.Category as Cat
+import Arithmetic.Types (type (<=), type (:=:))
+import Data.ByteArray.Builder.Bounded.Unsafe (Builder(..))
 
+import qualified Data.ByteArray.Builder.Bounded.Unsafe as Unsafe
 import qualified Data.Primitive as PM
 
--- | A builder parameterized by the maximum number of bytes it uses
--- when executed.
-newtype Builder :: Nat -> Type where
-   Builder ::
-        (forall s. MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #))
-     -> Builder n
-
+-- Used internally.
 knownNat :: KnownNat n => Proxy# n -> Int
+{-# inline knownNat #-}
 knownNat p = fromIntegral (natVal' p)
 
--- | Execute the builder. This function is safe.
+-- | Execute the bounded builder.
 run :: forall n. KnownNat n
   => Builder n -- ^ Builder
   -> ByteArray
 {-# inline run #-}
 run b = runST $ do
   arr <- newByteArray (knownNat (proxy# :: Proxy# n))
-  len <- pasteST b arr 0
+  len <- Unsafe.pasteST b arr 0
   shrinkMutableByteArray arr len
   unsafeFreezeByteArray arr
-
--- | This function does not enforce the known upper bound on the
--- size. It is up to the user to do this.
-pasteST :: Builder n -> MutableByteArray s -> Int -> ST s Int
-{-# inline pasteST #-}
-pasteST (Builder f) (MutableByteArray arr) (I# off) =
-  ST $ \s0 -> case f arr off s0 of
-    (# s1, r #) -> (# s1, (I# r) #)
 
 -- | Paste the builder into the byte array starting at offset zero.
 -- This reallocates the byte array if it cannot accomodate the builder,
@@ -112,67 +93,40 @@ pasteGrowST b !(MutableByteArrayOffset{array=arr0,offset=off0}) = do
   let sz1 = off0 + req
   if sz1 <= sz0
     then do
-      off1 <- pasteST b arr0 off0
+      off1 <- Unsafe.pasteST b arr0 off0
       pure (MutableByteArrayOffset arr0 off1)
     else do
       arr1 <- PM.resizeMutableByteArray arr0 sz1
-      off1 <- pasteST b arr1 off0
+      off1 <- Unsafe.pasteST b arr1 off0
       pure (MutableByteArrayOffset arr1 off1)
-
--- | This function does not enforce the known upper bound on the
--- size. It is up to the user to do this.
-pasteIO :: Builder n -> MutableByteArray RealWorld -> Int -> IO Int
-{-# inline pasteIO #-}
-pasteIO b m off = stToIO (pasteST b m off)
-
--- | Constructor for 'Builder' that works on a function with lifted
--- arguments instead of unlifted ones. This is just as unsafe as the
--- actual constructor.
-construct :: (forall s. MutableByteArray s -> Int -> ST s Int) -> Builder n
-{-# inline construct #-}
-construct f = Builder
-  $ \arr off s0 ->
-    case unST (f (MutableByteArray arr) (I# off)) s0 of
-      (# s1, (I# n) #) -> (# s1, n #)
-
-infixr 9 `append`
 
 -- | The monoidal unit of `append`
 empty :: Builder 0
 empty = Builder $ \_ off0 s0 -> (# s0, off0 #)
 
+infixr 9 `append`
+
 -- | Concatenate two builders.
-append :: Builder n -> Builder m -> Builder (n + m)
+append :: Builder m -> Builder n -> Builder (m + n)
 append (Builder f) (Builder g) =
   Builder $ \arr off0 s0 -> case f arr off0 s0 of
     (# s1, r #) -> g arr r s1
 
--- | A proof that n is less than or equal to m
-newtype (n :: Nat) <= (m :: Nat) = LessThanEqual Int -- m - n
+-- | Weaken the bound on the maximum number of bytes required. For example,
+-- to use two builders with unequal bounds in a disjunctive setting:
+--
+-- > import qualified Arithmetic.Lte as Lte
+-- >
+-- > buildNumber :: Either Double Word64 -> Builder 32
+-- > buildNumber = \case
+-- >   Left d  -> doubleDec d
+-- >   Right w -> weaken (Lte.constant @19 @32) (word64Dec w)
+weaken :: forall m n. (m <= n) -> Builder m -> Builder n
+weaken !_ (Builder f) = Builder f
 
-instance Cat.Category (<=) where
-  id = LessThanEqual 0
-  -- b <= c (c - b) -> a <= b (b - a) -> a <= c (c - a)
-  LessThanEqual cb . LessThanEqual ba = LessThanEqual (cb + ba)
-
--- | Dynamically check than 'n' is less than or equal to 'm'
-isLessThanEqual :: (KnownNat n, KnownNat m) => Proxy# n -> Proxy# m -> Maybe (n <= m)
-isLessThanEqual n m = if 0 <= diff then Just (LessThanEqual diff) else Nothing
-  where diff = knownNat m - knownNat n
-
--- | Statically check than 'n' is less than or equal to 'm'. 'n' and 'm' must be known at compile time.
-lessThanEqual :: forall n m. (KnownNat n, KnownNat m, n GHC.<= m) => n <= m
-lessThanEqual = LessThanEqual (knownNat (proxy# :: Proxy# m) - knownNat (proxy# :: Proxy# n))
-
--- | Weaken the bound on the maximum number of bytes required.
--- >>> :{
--- buildNumber :: Either Double Word64 -> Builder 32
--- buildNumber = \case
---   Left d  -> doubleDec d
---   Right w -> raise lessThanEqual (word64Dec w)
--- :}
-raise :: forall m n. n <= m -> Builder n -> Builder m
-raise !_ (Builder f) = Builder f
+-- | Replace the upper bound on size with an equal number.
+substitute :: forall m n. (m :=: n) -> Builder m -> Builder n
+substitute !_ (Builder f) = Builder f
 
 -- | Encode a double-floating-point number, using decimal notation or
 -- scientific notation depending on the magnitude. This has undefined
@@ -207,7 +161,7 @@ int64Dec (I64# w) = int64Dec# w
 -- the word. This is only used internally.
 wordCommonDec# :: Word# -> Builder n
 {-# noinline wordCommonDec# #-}
-wordCommonDec# w# = construct $ \arr off0 -> if w /= 0
+wordCommonDec# w# = Unsafe.construct $ \arr off0 -> if w /= 0
   then internalWordLoop arr off0 (W# w#)
   else do
     writeByteArray arr off0 (c2w '0')
@@ -230,7 +184,7 @@ internalWordLoop arr off0 x0 = go off0 x0 where
 -- | Requires up to 19 bytes.
 int64Dec# :: Int# -> Builder 20
 {-# noinline int64Dec# #-}
-int64Dec# w# = construct $ \arr off0 -> case compare w 0 of
+int64Dec# w# = Unsafe.construct $ \arr off0 -> case compare w 0 of
   GT -> internalWordLoop arr off0 (fromIntegral w)
   EQ -> do
     writeByteArray arr off0 (c2w '0')
@@ -286,7 +240,7 @@ word8PaddedUpperHex (W8# w) = word8PaddedUpperHex# w
 -- might not be. Benchmark this.
 word64PaddedUpperHex# :: Word# -> Builder 16
 {-# noinline word64PaddedUpperHex# #-}
-word64PaddedUpperHex# w# = construct $ \arr off -> do
+word64PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   writeByteArray arr off (toHexUpper (unsafeShiftR w 60))
   writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 56))
   writeByteArray arr (off + 2) (toHexUpper (unsafeShiftR w 52))
@@ -309,7 +263,7 @@ word64PaddedUpperHex# w# = construct $ \arr off -> do
 
 word32PaddedUpperHex# :: Word# -> Builder 8
 {-# noinline word32PaddedUpperHex# #-}
-word32PaddedUpperHex# w# = construct $ \arr off -> do
+word32PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   writeByteArray arr off (toHexUpper (unsafeShiftR w 28))
   writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 24))
   writeByteArray arr (off + 2) (toHexUpper (unsafeShiftR w 20))
@@ -326,7 +280,7 @@ word32PaddedUpperHex# w# = construct $ \arr off -> do
 -- GHC make the decision. Open an issue on github if this is
 -- a problem.
 word16PaddedUpperHex# :: Word# -> Builder 4
-word16PaddedUpperHex# w# = construct $ \arr off -> do
+word16PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   writeByteArray arr off (toHexUpper (unsafeShiftR w 12))
   writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 8))
   writeByteArray arr (off + 2) (toHexUpper (unsafeShiftR w 4))
@@ -338,7 +292,7 @@ word16PaddedUpperHex# w# = construct $ \arr off -> do
 -- Definitely want this to inline. It's maybe a dozen instructions total.
 word8PaddedUpperHex# :: Word# -> Builder 2
 {-# inline word8PaddedUpperHex #-}
-word8PaddedUpperHex# w# = construct $ \arr off -> do
+word8PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   writeByteArray arr off (toHexUpper (unsafeShiftR w 4))
   writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 0))
   pure (off + 2)
@@ -350,28 +304,28 @@ word8PaddedUpperHex# w# = construct $ \arr off -> do
 ascii :: Char -> Builder 1
 ascii c = word8 (fromIntegral @Int @Word8 (ord c))
 
--- | Encode an UTF8 char. This only uses as much space as is required.
+-- | Encode a character as UTF-8. This only uses as much space as is required.
 char :: Char -> Builder 4
 char c
-  | codepoint < 0x80 = construct $ \arr off -> do
+  | codepoint < 0x80 = Unsafe.construct $ \arr off -> do
       writeByteArray arr off (unsafeWordToWord8 codepoint)
       pure (off + 1)
-  | codepoint < 0x800 = construct $ \arr off -> do
+  | codepoint < 0x800 = Unsafe.construct $ \arr off -> do
       writeByteArray arr off       (unsafeWordToWord8 (byteTwoOne codepoint))
       writeByteArray arr (off + 1) (unsafeWordToWord8 (byteTwoTwo codepoint))
       return (off + 2)
-  | codepoint >= 0xD800 && codepoint < 0xE000 = construct $ \arr off -> do
+  | codepoint >= 0xD800 && codepoint < 0xE000 = Unsafe.construct $ \arr off -> do
       -- Codepoint U+FFFD
       writeByteArray arr off       (0xEF :: Word8)
       writeByteArray arr (off + 1) (0xBF :: Word8)
       writeByteArray arr (off + 2) (0xBD :: Word8)
       return (off + 3)
-  | codepoint < 0x10000 = construct $ \arr off -> do
+  | codepoint < 0x10000 = Unsafe.construct $ \arr off -> do
       writeByteArray arr off       (unsafeWordToWord8 (byteThreeOne codepoint))
       writeByteArray arr (off + 1) (unsafeWordToWord8 (byteThreeTwo codepoint))
       writeByteArray arr (off + 2) (unsafeWordToWord8 (byteThreeThree codepoint))
       return (off + 3)
-  | otherwise = construct $ \arr off -> do
+  | otherwise = Unsafe.construct $ \arr off -> do
       writeByteArray arr off       (unsafeWordToWord8 (byteFourOne codepoint))
       writeByteArray arr (off + 1) (unsafeWordToWord8 (byteFourTwo codepoint))
       writeByteArray arr (off + 2) (unsafeWordToWord8 (byteFourThree codepoint))
@@ -418,7 +372,7 @@ char c
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a big-endian fashion.
 word64BE :: Word64 -> Builder 8
-word64BE w = construct $ \arr off -> do
+word64BE w = Unsafe.construct $ \arr off -> do
   writeByteArray arr (off    ) (fromIntegral @Word64 @Word8 (unsafeShiftR w 56))
   writeByteArray arr (off + 1) (fromIntegral @Word64 @Word8 (unsafeShiftR w 48))
   writeByteArray arr (off + 2) (fromIntegral @Word64 @Word8 (unsafeShiftR w 40))
@@ -432,7 +386,7 @@ word64BE w = construct $ \arr off -> do
 -- | Requires exactly 4 bytes. Dump the octets of a 32-bit
 -- word in a big-endian fashion.
 word32BE :: Word32 -> Builder 4
-word32BE w = construct $ \arr off -> do
+word32BE w = Unsafe.construct $ \arr off -> do
   writeByteArray arr (off    ) (fromIntegral @Word32 @Word8 (unsafeShiftR w 24))
   writeByteArray arr (off + 1) (fromIntegral @Word32 @Word8 (unsafeShiftR w 16))
   writeByteArray arr (off + 2) (fromIntegral @Word32 @Word8 (unsafeShiftR w 8))
@@ -442,13 +396,13 @@ word32BE w = construct $ \arr off -> do
 -- | Requires exactly 2 bytes. Dump the octets of a 16-bit
 -- word in a big-endian fashion.
 word16BE :: Word16 -> Builder 2
-word16BE w = construct $ \arr off -> do
+word16BE w = Unsafe.construct $ \arr off -> do
   writeByteArray arr (off    ) (fromIntegral @Word16 @Word8 (unsafeShiftR w 8))
   writeByteArray arr (off + 1) (fromIntegral @Word16 @Word8 w)
   pure (off + 2)
 
 word8 :: Word8 -> Builder 1
-word8 w = construct $ \arr off -> do
+word8 w = Unsafe.construct $ \arr off -> do
   writeByteArray arr off w
   pure (off + 1)
 
@@ -468,9 +422,6 @@ reverseBytes arr begin end = go begin end where
 
 c2w :: Char -> Word8
 c2w = fromIntegral . ord
-
-unST :: ST s a -> State# s -> (# State# s, a #)
-unST (ST f) = f
 
 shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
 shrinkMutableByteArray (MutableByteArray arr) (I# sz) =

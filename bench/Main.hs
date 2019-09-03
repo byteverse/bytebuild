@@ -2,7 +2,7 @@ import Gauge (bgroup,bench,whnf)
 import Gauge.Main (defaultMain)
 import Data.Word (Word64)
 import Data.Primitive (ByteArray)
-import qualified Data.ByteArray.Builder.Small.Unsafe as U
+import qualified Data.ByteArray.Builder.Bounded as U
 
 import qualified HexWord64
 

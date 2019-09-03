@@ -6,7 +6,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language UnboxedTuples #-}
 
-module Data.ByteArray.Builder.Small
+module Data.ByteArray.Builder
   ( -- * Bounded Primitives
     Builder(..)
   , construct
@@ -24,6 +24,8 @@ module Data.ByteArray.Builder.Small
   , bytearray
   , shortTextUtf8
   , shortTextJsonString
+  , cstring
+  , stringUtf8
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
@@ -60,32 +62,15 @@ import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Text.Short (ShortText)
 import Data.Char (ord)
+import Data.ByteArray.Builder.Unsafe (Builder(Builder))
+import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
 
 import qualified GHC.Exts as Exts
 import qualified Data.Text.Short as TS
 import qualified Data.Primitive as PM
 import qualified Data.Vector as V
-import qualified Data.ByteArray.Builder.Small.Bounded as Bounded
-
--- | An unmaterialized sequence of bytes that may be pasted
--- into a mutable byte array.
-newtype Builder = Builder
-  -- This functions takes an offset and a number of remaining bytes
-  -- and returns the new offset.
-  (forall s. MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #))
-
-instance Semigroup Builder where
-  {-# inline (<>) #-}
-  Builder f <> Builder g = Builder $ \arr off0 len0 s0 -> case f arr off0 len0 s0 of
-    (# s1, r #) -> case r /=# (-1#) of
-      1# -> g arr r (len0 +# (off0 -# r)) s1
-      _ -> (# s1, (-1#) #)
-
-instance Monoid Builder where
-  mempty = Builder $ \_ off0 _ s0 -> (# s0, off0 #)
-
-instance IsString Builder where
-  fromString = shortTextUtf8 . TS.fromString
+import qualified Data.ByteArray.Builder.Bounded as Bounded
+import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
 
 -- | Run a builder. An accurate size hint is important for good performance.
 -- The size hint should be slightly larger than the actual size.
@@ -101,7 +86,7 @@ run hint b = runByteArrayST $ do
           Just len -> do
             shrinkMutableByteArray arr len
             unsafeFreezeByteArray arr
-  go hint
+  go (max hint 1)
 
 -- | Variant of 'pasteArrayST' that runs in 'IO'.
 pasteArrayIO ::
@@ -186,9 +171,10 @@ construct f = Builder
         Nothing -> (# s1, (-1#) #)
         Just (I# n) -> (# s1, n #)
 
+-- | Convert a bounded builder to an unbounded one.
 fromBounded :: forall n. KnownNat n => Bounded.Builder n -> Builder
 {-# inline fromBounded #-}
-fromBounded (Bounded.Builder f) = Builder $ \arr off len s0 ->
+fromBounded (UnsafeBounded.Builder f) = Builder $ \arr off len s0 ->
   case fromIntegral (natVal' (proxy# :: Proxy# n)) of
     I# req -> case len >=# req of
       1# -> f arr off s0
@@ -226,7 +212,7 @@ slicedUtf8TextJson !src# !soff0# !slen0# = construct $ \(MutableBytes dst doff0 
                     then PM.writeByteArray dst doff (c2w c) *> go (soff + 1) (slen - 1) (doff + 1)
                     else do
                       write2 dst doff '\\' 'u'
-                      doff' <- Bounded.pasteST
+                      doff' <- UnsafeBounded.pasteST
                         (Bounded.word16PaddedUpperHex (fromIntegral (c2w c)))
                         dst (doff + 2)
                       go (soff + 1) (slen - 1) doff'
