@@ -1,7 +1,9 @@
+import Data.Primitive (ByteArray)
+import Data.Word (Word64)
 import Gauge (bgroup,bench,whnf)
 import Gauge.Main (defaultMain)
-import Data.Word (Word64)
-import Data.Primitive (ByteArray)
+
+import qualified Arithmetic.Nat as Nat
 import qualified Data.ByteArray.Builder.Bounded as U
 
 import qualified HexWord64
@@ -33,7 +35,7 @@ data Word64s = Word64s
 
 encodeHexWord64s :: Word64s -> ByteArray
 {-# noinline encodeHexWord64s #-}
-encodeHexWord64s (Word64s a b c d e f g h) = U.run $
+encodeHexWord64s (Word64s a b c d e f g h) = U.run Nat.constant $
   U.word64PaddedUpperHex a `U.append`
   U.word64PaddedUpperHex b `U.append`
   U.word64PaddedUpperHex c `U.append`
@@ -45,7 +47,7 @@ encodeHexWord64s (Word64s a b c d e f g h) = U.run $
 
 encodeHexWord64sLoop :: Word64s -> ByteArray
 {-# noinline encodeHexWord64sLoop #-}
-encodeHexWord64sLoop (Word64s a b c d e f g h) = U.run $
+encodeHexWord64sLoop (Word64s a b c d e f g h) = U.run Nat.constant $
   HexWord64.word64PaddedUpperHex a `U.append`
   HexWord64.word64PaddedUpperHex b `U.append`
   HexWord64.word64PaddedUpperHex c `U.append`

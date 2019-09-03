@@ -51,20 +51,21 @@ module Data.ByteArray.Builder
 import Control.Monad.Primitive
 import Control.Monad.ST
 import Control.Monad.ST.Run (runByteArrayST)
-import Data.Bytes.Types
-import Data.Primitive
-import Data.Int (Int64)
-import GHC.Exts
-import GHC.ST
-import GHC.Word
-import GHC.TypeLits (KnownNat,natVal')
-import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
-import Data.ByteString.Short.Internal (ShortByteString(SBS))
-import Data.Text.Short (ShortText)
-import Data.Char (ord)
 import Data.ByteArray.Builder.Unsafe (Builder(Builder))
 import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
+import Data.ByteString.Short.Internal (ShortByteString(SBS))
+import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
+import Data.Char (ord)
+import Data.Int (Int64)
+import Data.Primitive
+import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
+import Data.Text.Short (ShortText)
+import GHC.Exts
+import GHC.ST (ST(ST))
+import GHC.Word
 
+import qualified Arithmetic.Nat as Nat
+import qualified Arithmetic.Types as Arithmetic
 import qualified GHC.Exts as Exts
 import qualified Data.Text.Short as TS
 import qualified Data.Primitive as PM
@@ -171,14 +172,19 @@ construct f = Builder
         Nothing -> (# s1, (-1#) #)
         Just (I# n) -> (# s1, n #)
 
--- | Convert a bounded builder to an unbounded one.
-fromBounded :: forall n. KnownNat n => Bounded.Builder n -> Builder
+-- | Convert a bounded builder to an unbounded one. If the size
+-- is a constant, use @Arithmetic.Nat.constant@ as the first argument
+-- to let GHC conjure up this value for you.
+fromBounded ::
+     Arithmetic.Nat n
+  -> Bounded.Builder n
+  -> Builder
 {-# inline fromBounded #-}
-fromBounded (UnsafeBounded.Builder f) = Builder $ \arr off len s0 ->
-  case fromIntegral (natVal' (proxy# :: Proxy# n)) of
-    I# req -> case len >=# req of
-      1# -> f arr off s0
-      _ -> (# s0, (-1#) #)
+fromBounded n (UnsafeBounded.Builder f) = Builder $ \arr off len s0 ->
+  let !(I# req) = Nat.demote n in
+  case len >=# req of
+    1# -> f arr off s0
+    _ -> (# s0, (-1#) #)
 
 -- | Create a builder from an unsliced byte sequence.
 bytearray :: ByteArray -> Builder
@@ -251,70 +257,70 @@ shortTextJsonString a =
 -- This encoding never starts with a zero unless the
 -- argument was zero.
 word64Dec :: Word64 -> Builder
-word64Dec w = fromBounded (Bounded.word64Dec w)
+word64Dec w = fromBounded Nat.constant (Bounded.word64Dec w)
 
 -- | Encodes an unsigned 16-bit integer as decimal.
 -- This encoding never starts with a zero unless the
 -- argument was zero.
 word32Dec :: Word32 -> Builder
-word32Dec w = fromBounded (Bounded.word32Dec w)
+word32Dec w = fromBounded Nat.constant (Bounded.word32Dec w)
 
 -- | Encodes an unsigned 16-bit integer as decimal.
 -- This encoding never starts with a zero unless the
 -- argument was zero.
 word16Dec :: Word16 -> Builder
-word16Dec w = fromBounded (Bounded.word16Dec w)
+word16Dec w = fromBounded Nat.constant (Bounded.word16Dec w)
 
 -- | Encode a double-floating-point number, using decimal notation or
 -- scientific notation depending on the magnitude. This has undefined
 -- behavior when representing @+inf@, @-inf@, and @NaN@. It will not
 -- crash, but the generated numbers will be nonsense.
 doubleDec :: Double -> Builder
-doubleDec w = fromBounded (Bounded.doubleDec w)
+doubleDec w = fromBounded Nat.constant (Bounded.doubleDec w)
 
 -- | Encodes a signed 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 -- Negative numbers are preceded by a minus sign. Positive numbers
 -- are not preceded by anything.
 int64Dec :: Int64 -> Builder
-int64Dec w = fromBounded (Bounded.int64Dec w)
+int64Dec w = fromBounded Nat.constant (Bounded.int64Dec w)
 
 -- | Encode a 64-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 16 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 1022 as @00000000000003FE@.
 word64PaddedUpperHex :: Word64 -> Builder
 word64PaddedUpperHex w =
-  fromBounded (Bounded.word64PaddedUpperHex w)
+  fromBounded Nat.constant (Bounded.word64PaddedUpperHex w)
 
 -- | Encode a 32-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 8 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 1022 as @000003FE@.
 word32PaddedUpperHex :: Word32 -> Builder
 word32PaddedUpperHex w =
-  fromBounded (Bounded.word32PaddedUpperHex w)
+  fromBounded Nat.constant (Bounded.word32PaddedUpperHex w)
 
 -- | Encode a 16-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 4 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 1022 as @03FE@.
 word16PaddedUpperHex :: Word16 -> Builder
 word16PaddedUpperHex w =
-  fromBounded (Bounded.word16PaddedUpperHex w)
+  fromBounded Nat.constant (Bounded.word16PaddedUpperHex w)
 
 -- | Encode a 8-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 2 digits. This uses uppercase for the alphabetical
 -- digits. For example, this encodes the number 11 as @0B@.
 word8PaddedUpperHex :: Word8 -> Builder
 word8PaddedUpperHex w =
-  fromBounded (Bounded.word8PaddedUpperHex w)
+  fromBounded Nat.constant (Bounded.word8PaddedUpperHex w)
 
 -- | Encode an ASCII char.
 -- Precondition: Input must be an ASCII character. This is not checked.
 ascii :: Char -> Builder
-ascii c = fromBounded (Bounded.char c)
+ascii c = fromBounded Nat.constant (Bounded.char c)
 
 -- | Encode an UTF8 char. This only uses as much space as is required.
 char :: Char -> Builder
-char c = fromBounded (Bounded.char c)
+char c = fromBounded Nat.constant (Bounded.char c)
 
 unST :: ST s a -> State# s -> (# State# s, a #)
 unST (ST f) = f
@@ -326,20 +332,20 @@ shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a big-endian fashion.
 word64BE :: Word64 -> Builder
-word64BE w = fromBounded (Bounded.word64BE w)
+word64BE w = fromBounded Nat.constant (Bounded.word64BE w)
 
 -- | Requires exactly 4 bytes. Dump the octets of a 32-bit
 -- word in a big-endian fashion.
 word32BE :: Word32 -> Builder
-word32BE w = fromBounded (Bounded.word32BE w)
+word32BE w = fromBounded Nat.constant (Bounded.word32BE w)
 
 -- | Requires exactly 2 bytes. Dump the octets of a 16-bit
 -- word in a big-endian fashion.
 word16BE :: Word16 -> Builder
-word16BE w = fromBounded (Bounded.word16BE w)
+word16BE w = fromBounded Nat.constant (Bounded.word16BE w)
 
 word8 :: Word8 -> Builder
-word8 w = fromBounded (Bounded.word8 w)
+word8 w = fromBounded Nat.constant (Bounded.word8 w)
 
 -- ShortText is already UTF-8 encoded. This is a no-op.
 shortTextToByteArray :: ShortText -> ByteArray

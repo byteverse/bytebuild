@@ -9,12 +9,12 @@ import Data.ByteArray.Builder
 import Data.Word
 import Data.Char (ord)
 import Data.Primitive (ByteArray)
-import Debug.Trace
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.QuickCheck ((===))
 import Text.Printf (printf)
 import Test.Tasty.HUnit ((@=?))
 
+import qualified Arithmetic.Nat as Nat
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy.Char8 as LB
@@ -24,7 +24,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import qualified GHC.Exts as Exts
-import qualified Test.QuickCheck as QC
 import qualified Test.Tasty.HUnit as THU
 import qualified Test.Tasty.QuickCheck as TQC
 
@@ -95,8 +94,8 @@ tests = testGroup "Tests"
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->
         run 1
-          (  fromBounded (HexWord64.word64PaddedUpperHex x)
-          <> fromBounded (HexWord64.word64PaddedUpperHex y)
+          (  fromBounded Nat.constant (HexWord64.word64PaddedUpperHex x)
+          <> fromBounded Nat.constant (HexWord64.word64PaddedUpperHex y)
           )
         ===
         pack (showWord64PaddedUpperHex x <> showWord64PaddedUpperHex y)

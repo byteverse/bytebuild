@@ -1,14 +1,14 @@
-{-# language KindSignatures #-}
-{-# language ScopedTypeVariables #-}
 {-# language BangPatterns #-}
-{-# language MagicHash #-}
 {-# language BinaryLiterals #-}
-{-# language UnboxedTuples #-}
-{-# language RankNTypes #-}
-{-# language LambdaCase #-}
-{-# language TypeOperators #-}
 {-# language DataKinds #-}
+{-# language KindSignatures #-}
+{-# language LambdaCase #-}
+{-# language MagicHash #-}
+{-# language RankNTypes #-}
+{-# language ScopedTypeVariables #-}
 {-# language TypeApplications #-}
+{-# language TypeOperators #-}
+{-# language UnboxedTuples #-}
 
 -- | The functions in this module are explict in the amount of bytes they require.
 module Data.ByteArray.Builder.Bounded
@@ -44,35 +44,35 @@ module Data.ByteArray.Builder.Bounded
   , doubleDec
   ) where
 
+import Arithmetic.Types (type (<=), type (:=:))
 import Control.Monad.Primitive
 import Control.Monad.ST
 import Data.Bits
+import Data.ByteArray.Builder.Bounded.Unsafe (Builder(..))
 import Data.Char (ord)
 import Data.Primitive
-import GHC.Exts
-import GHC.ST (ST(ST))
-import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
-import GHC.Int (Int64(I64#))
-import GHC.TypeLits (KnownNat,type (+),natVal')
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
-import Arithmetic.Types (type (<=), type (:=:))
-import Data.ByteArray.Builder.Bounded.Unsafe (Builder(..))
+import GHC.Exts
+import GHC.Int (Int64(I64#))
+import GHC.ST (ST(ST))
+import GHC.TypeLits (type (+))
+import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
 
+import qualified Arithmetic.Types as Arithmetic
+import qualified Arithmetic.Nat as Nat
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as Unsafe
 import qualified Data.Primitive as PM
 
--- Used internally.
-knownNat :: KnownNat n => Proxy# n -> Int
-{-# inline knownNat #-}
-knownNat p = fromIntegral (natVal' p)
-
--- | Execute the bounded builder.
-run :: forall n. KnownNat n
-  => Builder n -- ^ Builder
+-- | Execute the bounded builder. If the size is a constant,
+-- use @Arithmetic.Nat.constant@ as the first argument to let
+-- GHC conjure up this value for you.
+run ::
+     Arithmetic.Nat n
+  -> Builder n -- ^ Builder
   -> ByteArray
 {-# inline run #-}
-run b = runST $ do
-  arr <- newByteArray (knownNat (proxy# :: Proxy# n))
+run n b = runST $ do
+  arr <- newByteArray (Nat.demote n)
   len <- Unsafe.pasteST b arr 0
   shrinkMutableByteArray arr len
   unsafeFreezeByteArray arr
@@ -80,16 +80,17 @@ run b = runST $ do
 -- | Paste the builder into the byte array starting at offset zero.
 -- This reallocates the byte array if it cannot accomodate the builder,
 -- growing it by the minimum amount necessary.
-pasteGrowST :: forall n s. KnownNat n
-  => Builder n
+pasteGrowST ::
+     Arithmetic.Nat n
+  -> Builder n
   -> MutableByteArrayOffset s
      -- ^ Initial buffer, used linearly. Do not reuse this argument.
   -> ST s (MutableByteArrayOffset s)
      -- ^ Final buffer that accomodated the builder.
 {-# inline pasteGrowST #-}
-pasteGrowST b !(MutableByteArrayOffset{array=arr0,offset=off0}) = do
+pasteGrowST n b !(MutableByteArrayOffset{array=arr0,offset=off0}) = do
   sz0 <- PM.getSizeofMutableByteArray arr0
-  let req = knownNat (proxy# :: Proxy# n)
+  let req = Nat.demote n
   let sz1 = off0 + req
   if sz1 <= sz0
     then do
