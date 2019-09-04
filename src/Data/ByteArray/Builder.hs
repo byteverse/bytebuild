@@ -53,8 +53,8 @@ module Data.ByteArray.Builder
   , doubleDec
   ) where
 
-import Control.Monad.Primitive
-import Control.Monad.ST
+import Control.Monad.Primitive (primitive_)
+import Control.Monad.ST (ST,stToIO)
 import Control.Monad.ST.Run (runByteArrayST)
 import Data.ByteArray.Builder.Unsafe (Builder(Builder))
 import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
@@ -62,12 +62,12 @@ import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
 import Data.Char (ord)
 import Data.Int (Int64,Int32,Int16,Int8)
-import Data.Primitive
+import Data.Primitive (ByteArray(..),MutableByteArray(..))
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.Text.Short (ShortText)
-import GHC.Exts
+import Data.Word (Word64,Word32,Word16,Word8)
+import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,RealWorld,(>=#),(/=#))
 import GHC.ST (ST(ST))
-import GHC.Word
 
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
@@ -86,12 +86,12 @@ run ::
   -> ByteArray
 run hint b = runByteArrayST $ do
   let go !n = do
-        arr <- newByteArray n
+        arr <- PM.newByteArray n
         pasteST b (MutableBytes arr 0 n) >>= \case
           Nothing -> go (n + 64)
           Just len -> do
             shrinkMutableByteArray arr len
-            unsafeFreezeByteArray arr
+            PM.unsafeFreezeByteArray arr
   go (max hint 1)
 
 -- | Variant of 'pasteArrayST' that runs in 'IO'.
@@ -157,7 +157,7 @@ pasteST :: Builder -> MutableBytes s -> ST s (Maybe Int)
 {-# inline pasteST #-}
 pasteST (Builder f) (MutableBytes (MutableByteArray arr) (I# off) (I# len)) =
   ST $ \s0 -> case f arr off len s0 of
-    (# s1, r #) -> if isTrue# (r /=# (-1#))
+    (# s1, r #) -> if Exts.isTrue# (r /=# (-1#))
       then (# s1, Just (I# r) #)
       else (# s1, Nothing #)
 
@@ -193,13 +193,13 @@ fromBounded n (UnsafeBounded.Builder f) = Builder $ \arr off len s0 ->
 
 -- | Create a builder from an unsliced byte sequence.
 bytearray :: ByteArray -> Builder
-bytearray a = bytes (Bytes a 0 (sizeofByteArray a))
+bytearray a = bytes (Bytes a 0 (PM.sizeofByteArray a))
 
 -- | Create a builder from a sliced byte sequence.
 bytes :: Bytes -> Builder
 bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len >= slen
   then do
-    copyByteArray arr off src soff slen
+    PM.copyByteArray arr off src soff slen
     pure (Just (off + slen))
   else pure Nothing
 
@@ -243,7 +243,7 @@ write2 marr ix a b = do
 shortTextUtf8 :: ShortText -> Builder
 shortTextUtf8 a =
   let ba = shortTextToByteArray a
-   in bytes (Bytes ba 0 (sizeofByteArray ba))
+   in bytes (Bytes ba 0 (PM.sizeofByteArray ba))
 
 -- | Create a builder from text. The text will be UTF-8 encoded,
 -- and JSON special characters will be escaped. Additionally, the
@@ -366,7 +366,7 @@ unST (ST f) = f
 
 shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
 shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
-  primitive_ (shrinkMutableByteArray# arr sz)
+  primitive_ (Exts.shrinkMutableByteArray# arr sz)
 
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a big-endian fashion.
