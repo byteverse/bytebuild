@@ -1,5 +1,0 @@
-packages: .
-source-repository-package
-  type: git
-  location: https://github.com/andrewthad/natural-arithmetic
-  tag: 68868c96b58ddaf71bb865b247d2c14c3668f4c2
