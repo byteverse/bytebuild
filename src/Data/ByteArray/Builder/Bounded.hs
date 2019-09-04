@@ -29,6 +29,7 @@ module Data.ByteArray.Builder.Bounded
   , word32Dec
   , word16Dec
   , word8Dec
+  , wordDec
   , int64Dec
   , int32Dec
   , int16Dec
@@ -161,6 +162,12 @@ word16Dec (W16# w) = wordCommonDec# w
 -- This encoding never starts with a zero unless the argument was zero.
 word8Dec :: Word8 -> Builder 3
 word8Dec (W8# w) = wordCommonDec# w
+
+-- | Requires up to 19 bytes. Encodes an unsigned machine-sized integer
+-- as decimal. This encoding never starts with a zero unless the argument
+-- was zero.
+wordDec :: Word -> Builder 19
+wordDec (W# w) = wordCommonDec# w
 
 -- | Requires up to 20 bytes. Encodes a signed 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.

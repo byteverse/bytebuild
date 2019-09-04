@@ -32,6 +32,7 @@ module Data.ByteArray.Builder
   , word32Dec
   , word16Dec
   , word8Dec
+  , wordDec
   , int64Dec
   , int32Dec
   , int16Dec
@@ -281,6 +282,12 @@ word16Dec w = fromBounded Nat.constant (Bounded.word16Dec w)
 -- argument was zero.
 word8Dec :: Word8 -> Builder
 word8Dec w = fromBounded Nat.constant (Bounded.word8Dec w)
+
+-- | Encodes an unsigned machine-sized integer as decimal.
+-- This encoding never starts with a zero unless the
+-- argument was zero.
+wordDec :: Word -> Builder
+wordDec w = fromBounded Nat.constant (Bounded.wordDec w)
 
 -- | Encode a double-floating-point number, using decimal notation or
 -- scientific notation depending on the magnitude. This has undefined
