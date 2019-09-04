@@ -28,7 +28,9 @@ module Data.ByteArray.Builder.Bounded
   , word64Dec
   , word32Dec
   , word16Dec
+  , word8Dec
   , int64Dec
+  , intDec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
   , word16PaddedUpperHex
@@ -151,12 +153,24 @@ word32Dec (W32# w) = wordCommonDec# w
 word16Dec :: Word16 -> Builder 5
 word16Dec (W16# w) = wordCommonDec# w
 
+-- | Requires up to 3 bytes. Encodes an unsigned 8-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+word8Dec :: Word8 -> Builder 3
+word8Dec (W8# w) = wordCommonDec# w
+
 -- | Requires up to 20 bytes. Encodes a signed 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 -- Negative numbers are preceded by a minus sign. Positive numbers
 -- are not preceded by anything.
 int64Dec :: Int64 -> Builder 20
 int64Dec (I64# w) = int64Dec# w
+
+-- | Requires up to 20 bytes. Encodes a signed machine-sized integer
+-- as decimal. This encoding never starts with a zero unless the
+-- argument was zero. Negative numbers are preceded by a minus sign.
+-- Positive numbers are not preceded by anything.
+intDec :: Int -> Builder 20
+intDec (I# w) = int64Dec# w
 
 -- Requires a number of bytes that is bounded by the size of
 -- the word. This is only used internally.
