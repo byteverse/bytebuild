@@ -30,6 +30,9 @@ module Data.ByteArray.Builder.Bounded
   , word16Dec
   , word8Dec
   , int64Dec
+  , int32Dec
+  , int16Dec
+  , int8Dec
   , intDec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
@@ -55,7 +58,7 @@ import Data.Char (ord)
 import Data.Primitive
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import GHC.Exts
-import GHC.Int (Int64(I64#))
+import GHC.Int (Int64(I64#),Int32(I32#),Int16(I16#),Int8(I8#))
 import GHC.ST (ST(ST))
 import GHC.TypeLits (type (+))
 import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
@@ -163,14 +166,35 @@ word8Dec (W8# w) = wordCommonDec# w
 -- Negative numbers are preceded by a minus sign. Positive numbers
 -- are not preceded by anything.
 int64Dec :: Int64 -> Builder 20
-int64Dec (I64# w) = int64Dec# w
+int64Dec (I64# w) = intCommonDec# w
+
+-- | Requires up to 11 bytes. Encodes a signed 32-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+int32Dec :: Int32 -> Builder 11
+int32Dec (I32# w) = intCommonDec# w
+
+-- | Requires up to 6 bytes. Encodes a signed 16-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+int16Dec :: Int16 -> Builder 6
+int16Dec (I16# w) = intCommonDec# w
+
+-- | Requires up to 4 bytes. Encodes a signed 8-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+int8Dec :: Int8 -> Builder 4
+int8Dec (I8# w) = intCommonDec# w
 
 -- | Requires up to 20 bytes. Encodes a signed machine-sized integer
 -- as decimal. This encoding never starts with a zero unless the
 -- argument was zero. Negative numbers are preceded by a minus sign.
 -- Positive numbers are not preceded by anything.
 intDec :: Int -> Builder 20
-intDec (I# w) = int64Dec# w
+intDec (I# w) = intCommonDec# w
 
 -- Requires a number of bytes that is bounded by the size of
 -- the word. This is only used internally.
@@ -196,10 +220,11 @@ internalWordLoop arr off0 x0 = go off0 x0 where
       reverseBytes arr off0 (off - 1)
       pure off
 
--- | Requires up to 19 bytes.
-int64Dec# :: Int# -> Builder 20
-{-# noinline int64Dec# #-}
-int64Dec# w# = Unsafe.construct $ \arr off0 -> case compare w 0 of
+-- Requires up to 20 bytes. Can be less depending on what the
+-- size of the argument is known to be. Unsafe.
+intCommonDec# :: Int# -> Builder n
+{-# noinline intCommonDec# #-}
+intCommonDec# w# = Unsafe.construct $ \arr off0 -> case compare w 0 of
   GT -> internalWordLoop arr off0 (fromIntegral w)
   EQ -> do
     writeByteArray arr off0 (c2w '0')
