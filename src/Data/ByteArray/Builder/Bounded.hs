@@ -51,7 +51,8 @@ module Data.ByteArray.Builder.Bounded
 
 import Arithmetic.Types (type (<=), type (:=:))
 import Control.Monad.Primitive
-import Control.Monad.ST
+import Control.Monad.ST (ST)
+import Control.Monad.ST.Run (runByteArrayST)
 import Data.Bits
 import Data.ByteArray.Builder.Bounded.Unsafe (Builder(..))
 import Data.Char (ord)
@@ -76,7 +77,7 @@ run ::
   -> Builder n -- ^ Builder
   -> ByteArray
 {-# inline run #-}
-run n b = runST $ do
+run n b = runByteArrayST $ do
   arr <- newByteArray (Nat.demote n)
   len <- Unsafe.pasteST b arr 0
   shrinkMutableByteArray arr len
