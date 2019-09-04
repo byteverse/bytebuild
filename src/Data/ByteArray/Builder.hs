@@ -33,6 +33,9 @@ module Data.ByteArray.Builder
   , word16Dec
   , word8Dec
   , int64Dec
+  , int32Dec
+  , int16Dec
+  , int8Dec
   , intDec
   , word64PaddedUpperHex
   , word32PaddedUpperHex
@@ -58,7 +61,7 @@ import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
 import Data.Char (ord)
-import Data.Int (Int64)
+import Data.Int (Int64,Int32,Int16,Int8)
 import Data.Primitive
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.Text.Short (ShortText)
@@ -292,6 +295,27 @@ doubleDec w = fromBounded Nat.constant (Bounded.doubleDec w)
 -- are not preceded by anything.
 int64Dec :: Int64 -> Builder
 int64Dec w = fromBounded Nat.constant (Bounded.int64Dec w)
+
+-- | Encodes a signed 32-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+int32Dec :: Int32 -> Builder
+int32Dec w = fromBounded Nat.constant (Bounded.int32Dec w)
+
+-- | Encodes a signed 16-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+int16Dec :: Int16 -> Builder
+int16Dec w = fromBounded Nat.constant (Bounded.int16Dec w)
+
+-- | Encodes a signed 8-bit integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+int8Dec :: Int8 -> Builder
+int8Dec w = fromBounded Nat.constant (Bounded.int8Dec w)
 
 -- | Encodes a signed machine-sized integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
