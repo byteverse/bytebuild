@@ -172,7 +172,7 @@ word16Dec (W16# w) = wordCommonDec# w
 -- | Requires up to 3 bytes. Encodes an unsigned 8-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 word8Dec :: Word8 -> Builder 3
-word8Dec (W8# w) = wordCommonDec# w
+word8Dec (W8# w) = word8Dec# w
 
 -- | Requires up to 19 bytes. Encodes an unsigned machine-sized integer
 -- as decimal. This encoding never starts with a zero unless the argument
@@ -214,6 +214,22 @@ int8Dec (I8# w) = intCommonDec# w
 -- Positive numbers are not preceded by anything.
 intDec :: Int -> Builder 20
 intDec (I# w) = intCommonDec# w
+
+word8Dec# :: Word# -> Builder 3
+{-# noinline word8Dec# #-}
+word8Dec# w# = Unsafe.construct $ \arr off0 -> do
+  let !(I# off0# ) = off0
+      !(!x,!ones) = quotRem w 10
+      !(hundreds@(W# hundreds# ),tens@(W# tens# )) = quotRem x 10
+  writeByteArray arr off0 (fromIntegral (hundreds + 0x30) :: Word8)
+  let !hasHundreds = gtWord# hundreds# 0##
+      !off1@(I# off1# ) = I# (off0# +# hasHundreds)
+  writeByteArray arr off1 (fromIntegral (tens + 0x30) :: Word8)
+  let !off2 = I# (off1# +# (orI# hasHundreds (gtWord# tens# 0## )))
+  writeByteArray arr off2 (fromIntegral (ones + 0x30) :: Word8)
+  pure (off2 + 1)
+  where
+  w = W# w#
 
 -- Requires a number of bytes that is bounded by the size of
 -- the word. This is only used internally.
