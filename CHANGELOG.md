@@ -1,5 +1,15 @@
 # Revision history for small-bytearray-builder
 
+## 0.2.1.0 -- 2019-09-??
+
+* Stop exporting data constructor in `Data.ByteArray.Builder`.
+  This is technically a breaking change, but it was only
+  exported by accident. So, with this release, we will technically
+  violate PVP, and the previous release will be deprecated on hackage.
+* Add more functions for encoding unsigned words: `word16PaddedLowerHex`,
+  `word16LowerHex`, `word16UpperHex`, `word8LowerHex`.
+* Unroll loop for `word8Dec`.
+
 ## 0.2.0.0 -- 2019-09-04
 
 * Use `natural-arithmetic` to make manipulation of bounds possible.
