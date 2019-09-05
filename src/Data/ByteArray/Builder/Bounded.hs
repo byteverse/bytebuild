@@ -35,10 +35,19 @@ module Data.ByteArray.Builder.Bounded
   , int16Dec
   , int8Dec
   , intDec
+    -- * Unsigned Words
+    -- ** 64-bit
   , word64PaddedUpperHex
+    -- ** 32-bit
   , word32PaddedUpperHex
+    -- ** 16-bit
+  , word16PaddedLowerHex
   , word16PaddedUpperHex
+  , word16LowerHex
+  , word16UpperHex
+    -- ** 8-bit
   , word8PaddedUpperHex
+  , word8LowerHex
   , ascii
   , char
     -- ** Machine-Readable
@@ -67,6 +76,7 @@ import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
 
 import qualified Arithmetic.Types as Arithmetic
 import qualified Arithmetic.Nat as Nat
+import qualified Arithmetic.Lte as Lte
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as Unsafe
 import qualified Data.Primitive as PM
 
@@ -259,6 +269,17 @@ toHexUpper w' = fromIntegral
   loSolved = w + 48
   hiSolved = w + 55
 
+toHexLower :: Word -> Word8
+toHexLower w' = fromIntegral
+    $ (complement theMask .&. loSolved)
+  .|. (theMask .&. hiSolved)
+  where
+  w = w' .&. 0xF
+  -- This is all ones if the value was >= 10
+  theMask = (1 .&. unsafeShiftR (w - 10) 63) - 1
+  loSolved = w + 48
+  hiSolved = w + 87
+
 -- | Requires exactly 16 bytes. Encodes a 64-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 16 digits. This uses
 -- uppercase for the alphabetical digits. For example, this encodes the
@@ -275,8 +296,44 @@ word32PaddedUpperHex (W32# w) = word32PaddedUpperHex# w
 -- | Requires exactly 4 bytes. Encodes a 16-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 4 digits. This uses
 -- uppercase for the alphabetical digits.
+--
+-- >>> word16PaddedUpperHex 0xab0
+-- 0AB0
 word16PaddedUpperHex :: Word16 -> Builder 4
 word16PaddedUpperHex (W16# w) = word16PaddedUpperHex# w
+
+-- | Requires exactly 4 bytes. Encodes a 16-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 4 digits. This uses
+-- lowercase for the alphabetical digits.
+--
+-- >>> word16PaddedLowerHex 0xab0
+-- 0ab0
+word16PaddedLowerHex :: Word16 -> Builder 4
+word16PaddedLowerHex (W16# w) = word16PaddedLowerHex# w
+
+-- | Requires at most 4 bytes. Encodes a 16-bit unsigned integer as
+-- hexadecimal. No leading zeroes are displayed. Letters are presented
+-- in lowercase. If the number is zero, a single zero digit is used.
+--
+-- >>> word16LowerHex 0xab0
+-- ab0
+word16LowerHex :: Word16 -> Builder 4
+word16LowerHex (W16# w) = word16LowerHex# w
+
+-- | Requires at most 4 bytes. Encodes a 16-bit unsigned integer as
+-- hexadecimal. No leading zeroes are displayed. Letters are presented
+-- in uppercase. If the number is zero, a single zero digit is used.
+--
+-- >>> word16UpperHex 0xab0
+-- AB0
+word16UpperHex :: Word16 -> Builder 4
+word16UpperHex (W16# w) = word16UpperHex# w
+
+-- | Requires at most 2 bytes. Encodes a 8-bit unsigned integer as
+-- hexadecimal. No leading zeroes are displayed. If the number is zero,
+-- a single zero digit is used.
+word8LowerHex :: Word8 -> Builder 2
+word8LowerHex (W8# w) = word8LowerHex# w
 
 -- | Requires exactly 2 bytes. Encodes a 8-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 2 digits. This uses
@@ -337,13 +394,92 @@ word16PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   where
   w = W# w#
 
+word16PaddedLowerHex# :: Word# -> Builder 4
+word16PaddedLowerHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexLower (unsafeShiftR w 12))
+  writeByteArray arr (off + 1) (toHexLower (unsafeShiftR w 8))
+  writeByteArray arr (off + 2) (toHexLower (unsafeShiftR w 4))
+  writeByteArray arr (off + 3) (toHexLower (unsafeShiftR w 0))
+  pure (off + 4)
+  where
+  w = W# w#
+
+word12PaddedLowerHex# :: Word# -> Builder 3
+word12PaddedLowerHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexLower (unsafeShiftR w 8))
+  writeByteArray arr (off + 1) (toHexLower (unsafeShiftR w 4))
+  writeByteArray arr (off + 2) (toHexLower (unsafeShiftR w 0))
+  pure (off + 3)
+  where
+  w = W# w#
+
+word12PaddedUpperHex# :: Word# -> Builder 3
+word12PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexUpper (unsafeShiftR w 8))
+  writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 4))
+  writeByteArray arr (off + 2) (toHexUpper (unsafeShiftR w 0))
+  pure (off + 3)
+  where
+  w = W# w#
+
 -- Definitely want this to inline. It's maybe a dozen instructions total.
 word8PaddedUpperHex# :: Word# -> Builder 2
-{-# inline word8PaddedUpperHex #-}
+{-# inline word8PaddedUpperHex# #-}
 word8PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   writeByteArray arr off (toHexUpper (unsafeShiftR w 4))
   writeByteArray arr (off + 1) (toHexUpper (unsafeShiftR w 0))
   pure (off + 2)
+  where
+  w = W# w#
+
+word8PaddedLowerHex# :: Word# -> Builder 2
+{-# inline word8PaddedLowerHex# #-}
+word8PaddedLowerHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexLower (unsafeShiftR w 4))
+  writeByteArray arr (off + 1) (toHexLower (unsafeShiftR w 0))
+  pure (off + 2)
+  where
+  w = W# w#
+
+word4PaddedLowerHex# :: Word# -> Builder 1
+{-# inline word4PaddedLowerHex# #-}
+word4PaddedLowerHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexLower w)
+  pure (off + 1)
+  where
+  w = W# w#
+
+word4PaddedUpperHex# :: Word# -> Builder 1
+{-# inline word4PaddedUpperHex# #-}
+word4PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexUpper w)
+  pure (off + 1)
+  where
+  w = W# w#
+
+word16UpperHex# :: Word# -> Builder 4
+word16UpperHex# w#
+  | w <= 0xF = weaken Lte.constant (word4PaddedUpperHex# w#)
+  | w <= 0xFF = weaken Lte.constant (word8PaddedUpperHex# w#)
+  | w <= 0xFFF = weaken Lte.constant (word12PaddedUpperHex# w#)
+  | otherwise = word16PaddedUpperHex# w#
+  where
+  w = W# w#
+
+word16LowerHex# :: Word# -> Builder 4
+word16LowerHex# w#
+  | w <= 0xF = weaken Lte.constant (word4PaddedLowerHex# w#)
+  | w <= 0xFF = weaken Lte.constant (word8PaddedLowerHex# w#)
+  | w <= 0xFFF = weaken Lte.constant (word12PaddedLowerHex# w#)
+  | otherwise = word16PaddedLowerHex# w#
+  where
+  w = W# w#
+
+-- Precondition: argument less than 256
+word8LowerHex# :: Word# -> Builder 2
+word8LowerHex# w#
+  | w <= 0xF = weaken Lte.constant (word4PaddedLowerHex# w#)
+  | otherwise = weaken Lte.constant (word8PaddedLowerHex# w#)
   where
   w = W# w#
 

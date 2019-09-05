@@ -38,10 +38,19 @@ module Data.ByteArray.Builder
   , int16Dec
   , int8Dec
   , intDec
+    -- * Unsigned Words
+    -- ** 64-bit
   , word64PaddedUpperHex
+    -- ** 32-bit
   , word32PaddedUpperHex
+    -- ** 16-bit
   , word16PaddedUpperHex
+  , word16PaddedLowerHex
+  , word16LowerHex
+  , word16UpperHex
+    -- ** 8-bit
   , word8PaddedUpperHex
+  , word8LowerHex
   , ascii
   , char
     -- ** Machine-Readable
@@ -351,6 +360,34 @@ word32PaddedUpperHex w =
 word16PaddedUpperHex :: Word16 -> Builder
 word16PaddedUpperHex w =
   fromBounded Nat.constant (Bounded.word16PaddedUpperHex w)
+
+-- | Encode a 16-bit unsigned integer as hexadecimal, zero-padding
+-- the encoding to 4 digits. This uses lowercase for the alphabetical
+-- digits. For example, this encodes the number 1022 as @03fe@.
+word16PaddedLowerHex :: Word16 -> Builder
+word16PaddedLowerHex w =
+  fromBounded Nat.constant (Bounded.word16PaddedLowerHex w)
+
+-- | Encode a 16-bit unsigned integer as hexadecimal without leading
+-- zeroes. This uses lowercase for the alphabetical digits. For
+-- example, this encodes the number 1022 as @3fe@.
+word16LowerHex :: Word16 -> Builder
+word16LowerHex w =
+  fromBounded Nat.constant (Bounded.word16LowerHex w)
+
+-- | Encode a 16-bit unsigned integer as hexadecimal without leading
+-- zeroes. This uses uppercase for the alphabetical digits. For
+-- example, this encodes the number 1022 as @3FE@.
+word16UpperHex :: Word16 -> Builder
+word16UpperHex w =
+  fromBounded Nat.constant (Bounded.word16UpperHex w)
+
+-- | Encode a 16-bit unsigned integer as hexadecimal without leading
+-- zeroes. This uses lowercase for the alphabetical digits. For
+-- example, this encodes the number 1022 as @3FE@.
+word8LowerHex :: Word8 -> Builder
+word8LowerHex w =
+  fromBounded Nat.constant (Bounded.word8LowerHex w)
 
 -- | Encode a 8-bit unsigned integer as hexadecimal, zero-padding
 -- the encoding to 2 digits. This uses uppercase for the alphabetical
