@@ -172,7 +172,14 @@ word16Dec (W16# w) = wordCommonDec# w
 -- | Requires up to 3 bytes. Encodes an unsigned 8-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 word8Dec :: Word8 -> Builder 3
-word8Dec (W8# w) = word8Dec# w
+word8Dec (W8# w) =
+  -- We unroll the loop when encoding Word8s. This speeds things
+  -- up IPv4 encoding by about 10% in the @ip@ library. We can
+  -- encode Word8s at twice this speed by using a lookup table.
+  -- However, I (Andrew Martin) am concerned that although lookup
+  -- table perform very well in microbenchmarks, they can thrash
+  -- L1 cache in real applications.
+  word8Dec# w
 
 -- | Requires up to 19 bytes. Encodes an unsigned machine-sized integer
 -- as decimal. This encoding never starts with a zero unless the argument
