@@ -53,6 +53,10 @@ tests = testGroup "Tests"
         run 1 (word64PaddedUpperHex w)
         ===
         pack (showWord64PaddedUpperHex w)
+    , TQC.testProperty "word8Dec" $ \w ->
+        run 1 (word8Dec w)
+        ===
+        pack (show w)
     , TQC.testProperty "pasteArrayST" $ \(xs :: [Word64]) ->
         (runArray word64Dec (V.fromList xs))
         ===
