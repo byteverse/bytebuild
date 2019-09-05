@@ -8,7 +8,7 @@
 
 module Data.ByteArray.Builder
   ( -- * Bounded Primitives
-    Builder(..)
+    Builder
   , construct
   , fromBounded
     -- * Evaluation

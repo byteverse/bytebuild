@@ -10,7 +10,8 @@
 {-# language TypeOperators #-}
 {-# language UnboxedTuples #-}
 
--- | The functions in this module are explict in the amount of bytes they require.
+-- | The functions in this module are explict about the maximum number
+-- of bytes they require.
 module Data.ByteArray.Builder.Bounded
   ( -- * Builder
     Builder
