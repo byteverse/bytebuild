@@ -27,8 +27,11 @@ import Data.Primitive (MutableByteArray(..))
 -- when executed.
 newtype Builder :: Nat -> Type where
    Builder ::
-        (forall s. MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #))
+        (forall s. MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)) 
+        -- ^ This function takes a buffer, an offset, and a number of remaining bytes.
+        --   It returns the new offset.
      -> Builder n
+   
 
 -- | Constructor for 'Builder' that works on a function with lifted
 -- arguments instead of unlifted ones. This is just as unsafe as the

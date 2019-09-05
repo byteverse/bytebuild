@@ -31,10 +31,11 @@ import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
 
 -- | An unmaterialized sequence of bytes that may be pasted
 -- into a mutable byte array.
-newtype Builder = Builder
-  -- This functions takes an offset and a number of remaining bytes
-  -- and returns the new offset.
-  (forall s. MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #))
+newtype Builder
+  = Builder (forall s. MutableByteArray# s -> Int# -> Int# -> State# s -> (# State# s, Int# #))
+    -- ^ This function takes a buffer, an offset, and a number of remaining bytes.
+    --   It returns the new offset (should be greater than the old offset), or if
+    --   there was not enough space left in buffer, it returns -1.
 
 instance IsString Builder where
   {-# inline fromString #-}
