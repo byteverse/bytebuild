@@ -1,6 +1,6 @@
 # Revision history for small-bytearray-builder
 
-## 0.2.1.0 -- 2019-09-??
+## 0.2.1.0 -- 2019-09-05
 
 * Stop exporting data constructor in `Data.ByteArray.Builder`.
   This is technically a breaking change, but it was only
