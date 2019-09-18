@@ -1,5 +1,10 @@
 # Revision history for small-bytearray-builder
 
+## 0.2.2.0 -- 2019-??-??
+
+* Introduce `consLensBE32` for efficient serialization of wire protocols
+  that require prefixing a payload with its length.
+
 ## 0.2.1.0 -- 2019-09-05
 
 * Stop exporting data constructor in `Data.ByteArray.Builder`.

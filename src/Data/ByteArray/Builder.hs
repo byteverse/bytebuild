@@ -58,6 +58,8 @@ module Data.ByteArray.Builder
   , word32BE
   , word16BE
   , word8
+    -- ** Prefixing with Length
+  , consLength32BE
     -- * Encode Floating-Point Types
     -- ** Human-Readable
   , doubleDec
@@ -77,6 +79,7 @@ import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.Text.Short (ShortText)
 import Data.Word (Word64,Word32,Word16,Word8)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,RealWorld,(>=#),(/=#))
+import GHC.Exts ((+#),(-#))
 import GHC.ST (ST(ST))
 
 import qualified Arithmetic.Nat as Nat
@@ -427,8 +430,35 @@ word32BE w = fromBounded Nat.constant (Bounded.word32BE w)
 word16BE :: Word16 -> Builder
 word16BE w = fromBounded Nat.constant (Bounded.word16BE w)
 
+-- | Requires exactly 1 byte.
 word8 :: Word8 -> Builder
 word8 w = fromBounded Nat.constant (Bounded.word8 w)
+
+-- | Prefix a builder with its size in bytes. This size is
+-- presented as a big-endian 32-bit word. The need to prefix
+-- a builder with its length shows up a numbers of wire protocols
+-- including those of PostgreSQL and Apache Kafka. Note the
+-- equivalence:
+-- 
+-- > forall (n :: Int) (x :: Builder).
+-- >   let sz = sizeofByteArray (run n (consLength32BE x))
+-- >   consLength32BE x === word32BE (fromIntegral sz) <> x
+--
+-- However, using 'consLength32BE' is much more efficient here
+-- since it only materializes the 'ByteArray' once.
+consLength32BE :: Builder -> Builder
+consLength32BE (Builder f) = Builder $ \arr off len s0 -> case len >=# 4# of
+  1# -> case f arr (off +# 4# ) (len -# 4# ) s0 of
+    (# s1, r #) -> case r of
+      (-1#) -> (# s1, (-1#) #)
+      _ ->
+        let ST g = UnsafeBounded.pasteST
+              (Bounded.word32BE (fromIntegral ((I# r - I# off) - 4)))
+              (MutableByteArray arr)
+              (I# off)
+         in case g s1 of
+              (# s2, _ #) -> (# s2, r #)
+  _ -> (# s0, (-1#) #)
 
 -- ShortText is already UTF-8 encoded. This is a no-op.
 shortTextToByteArray :: ShortText -> ByteArray
