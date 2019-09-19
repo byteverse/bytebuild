@@ -7,7 +7,7 @@ import Control.Monad.ST (runST)
 import Data.Bytes.Types (MutableBytes(..))
 import Data.ByteArray.Builder
 import Data.Word
-import Data.Char (ord)
+import Data.Char (ord,chr)
 import Data.Primitive (ByteArray)
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.QuickCheck ((===))
@@ -57,6 +57,10 @@ tests = testGroup "Tests"
         run 1 (word8Dec w)
         ===
         pack (show w)
+    , TQC.testProperty "consLength32BE" $ \w ->
+        run 1 (consLength32BE (word8Dec w))
+        ===
+        pack ('\x00' : '\x00' : '\x00' : chr (L.length (show w)) : show w)
     , TQC.testProperty "pasteArrayST" $ \(xs :: [Word64]) ->
         (runArray word64Dec (V.fromList xs))
         ===
