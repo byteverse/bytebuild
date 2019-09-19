@@ -60,6 +60,7 @@ module Data.ByteArray.Builder
   , word8
     -- ** Prefixing with Length
   , consLength32BE
+  , consLength64BE
     -- * Encode Floating-Point Types
     -- ** Human-Readable
   , doubleDec
@@ -454,6 +455,23 @@ consLength32BE (Builder f) = Builder $ \arr off len s0 -> case len >=# 4# of
       _ ->
         let ST g = UnsafeBounded.pasteST
               (Bounded.word32BE (fromIntegral ((I# r - I# off) - 4)))
+              (MutableByteArray arr)
+              (I# off)
+         in case g s1 of
+              (# s2, _ #) -> (# s2, r #)
+  _ -> (# s0, (-1#) #)
+
+
+-- | Prefix a builder with its size in bytes. This size is
+-- presented as a big-endian 64-bit word. See 'consLength32BE'.
+consLength64BE :: Builder -> Builder
+consLength64BE (Builder f) = Builder $ \arr off len s0 -> case len >=# 8# of
+  1# -> case f arr (off +# 8# ) (len -# 8# ) s0 of
+    (# s1, r #) -> case r of
+      (-1#) -> (# s1, (-1#) #)
+      _ ->
+        let ST g = UnsafeBounded.pasteST
+              (Bounded.word64BE (fromIntegral ((I# r - I# off) - 8)))
               (MutableByteArray arr)
               (I# off)
          in case g s1 of

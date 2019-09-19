@@ -61,6 +61,10 @@ tests = testGroup "Tests"
         run 1 (consLength32BE (word8Dec w))
         ===
         pack ('\x00' : '\x00' : '\x00' : chr (L.length (show w)) : show w)
+    , TQC.testProperty "consLength64BE" $ \w ->
+        run 1 (consLength64BE (word16Dec w))
+        ===
+        pack ('\x00' : '\x00' : '\x00' : '\x00' : '\x00' : '\x00' : '\x00' : chr (L.length (show w)) : show w)
     , TQC.testProperty "pasteArrayST" $ \(xs :: [Word64]) ->
         (runArray word64Dec (V.fromList xs))
         ===
