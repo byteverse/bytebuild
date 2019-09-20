@@ -403,7 +403,7 @@ word8PaddedUpperHex w =
 -- | Encode an ASCII char.
 -- Precondition: Input must be an ASCII character. This is not checked.
 ascii :: Char -> Builder
-ascii c = fromBounded Nat.constant (Bounded.char c)
+ascii c = fromBounded Nat.constant (Bounded.ascii c)
 
 -- | Encode an UTF8 char. This only uses as much space as is required.
 char :: Char -> Builder

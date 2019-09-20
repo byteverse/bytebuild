@@ -1,11 +1,17 @@
+{-# language LambdaCase #-}
+{-# language OverloadedStrings #-}
+
 import Data.Primitive (ByteArray)
 import Data.Word (Word64)
 import Gauge (bgroup,bench,whnf)
 import Gauge.Main (defaultMain)
 
 import qualified Arithmetic.Nat as Nat
+import qualified Data.ByteArray.Builder as B
 import qualified Data.ByteArray.Builder.Bounded as U
 
+import qualified Cell
+import qualified SimpleCsv
 import qualified HexWord64
 
 main :: IO ()
@@ -15,6 +21,11 @@ main = defaultMain
       [ bench "library" (whnf encodeHexWord64s w64s)
       , bench "loop" (whnf encodeHexWord64sLoop w64s)
       ]
+    ]
+  , bgroup "unbounded"
+    [ bench "csv-no-escape" $ whnf
+        (\x -> B.run 4080 (SimpleCsv.encodeRows x))
+        Cell.cells
     ]
   ]
 

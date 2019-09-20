@@ -507,10 +507,12 @@ word8LowerHex# w#
   where
   w = W# w#
 
--- | Encode an ASCII char.
+-- | Encode an ASCII character.
 -- Precondition: Input must be an ASCII character. This is not checked.
 ascii :: Char -> Builder 1
-ascii c = word8 (fromIntegral @Int @Word8 (ord c))
+ascii (C# c) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
+  primitive_ (writeCharArray# arr off c)
+  pure (I# (off +# 1# ))
 
 -- | Encode a character as UTF-8. This only uses as much space as is required.
 char :: Char -> Builder 4
