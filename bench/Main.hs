@@ -13,6 +13,7 @@ import qualified Data.ByteArray.Builder.Bounded as U
 import qualified Cell
 import qualified SimpleCsv
 import qualified HexWord64
+import qualified Word16Tree
 
 main :: IO ()
 main = defaultMain
@@ -26,6 +27,15 @@ main = defaultMain
     [ bench "csv-no-escape" $ whnf
         (\x -> B.run 4080 (SimpleCsv.encodeRows x))
         Cell.cells
+    , bench "word-16-tree-small" $ whnf
+        (\x -> B.run 4080 (Word16Tree.encode x))
+        Word16Tree.exampleSmall
+    , bench "word-16-tree-2000" $ whnf
+        (\x -> B.run ((4096 * 16) - 16) (Word16Tree.encode x))
+        Word16Tree.example2000
+    , bench "word-16-tree-9000" $ whnf
+        (\x -> B.run ((4096 * 64) - 16) (Word16Tree.encode x))
+        Word16Tree.example9000
     ]
   ]
 

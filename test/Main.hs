@@ -28,6 +28,7 @@ import qualified Test.Tasty.HUnit as THU
 import qualified Test.Tasty.QuickCheck as TQC
 
 import qualified HexWord64
+import qualified Word16Tree
 
 main :: IO ()
 main = defaultMain tests
@@ -102,6 +103,9 @@ tests = testGroup "Tests"
         pack ("\"Hi\\r\\nLo\"") @=? run 1 (shortTextJsonString "Hi\r\nLo")
     , THU.testCase "shortTextJsonString-D" $
         pack ("\"Hi\\u001BLo\"") @=? run 1 (shortTextJsonString "Hi\ESCLo")
+    , THU.testCase "word-16-tree" $
+        Word16Tree.expectedSmall @=? run 1
+          (Word16Tree.encode Word16Tree.exampleSmall)
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->
