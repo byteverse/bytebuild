@@ -92,8 +92,9 @@ import qualified Data.Vector as V
 import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
 
--- | Run a builder. An accurate size hint is important for good performance.
--- The size hint should be slightly larger than the actual size.
+-- | Run a builder. An accurate size hint is important for
+-- good performance. The size hint should be slightly greater
+-- than or equal to the actual size.
 run ::
      Int -- ^ Hint for upper bound on size
   -> Builder -- ^ Builder
@@ -102,11 +103,11 @@ run hint b = runByteArrayST $ do
   let go !n = do
         arr <- PM.newByteArray n
         pasteST b (MutableBytes arr 0 n) >>= \case
-          Nothing -> go (n + 64)
+          Nothing -> go (n + n + 16)
           Just len -> do
             shrinkMutableByteArray arr len
             PM.unsafeFreezeByteArray arr
-  go (max hint 1)
+  go (max hint 16)
 
 -- | Variant of 'pasteArrayST' that runs in 'IO'.
 pasteArrayIO ::
