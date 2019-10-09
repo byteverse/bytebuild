@@ -9,19 +9,12 @@
 module Data.ByteArray.Builder
   ( -- * Bounded Primitives
     Builder
-  , construct
   , fromBounded
     -- * Evaluation
   , run
-  , pasteST
-  , pasteIO
-  , pasteGrowST
-  , pasteGrowIO
-  , pasteArrayST
-  , pasteArrayIO
     -- * Materialized Byte Sequences
   , bytes
-  , bytearray
+  , byteArray
   , shortTextUtf8
   , shortTextJsonString
   , cstring
@@ -77,9 +70,10 @@ module Data.ByteArray.Builder
   ) where
 
 import Control.Monad.Primitive (primitive_)
-import Control.Monad.ST (ST,stToIO)
+import Control.Monad.ST (ST,stToIO,runST)
 import Control.Monad.ST.Run (runByteArrayST)
 import Data.ByteArray.Builder.Unsafe (Builder(Builder))
+import Data.ByteArray.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
@@ -90,8 +84,9 @@ import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.Text.Short (ShortText)
 import Data.Word (Word64,Word32,Word16,Word8)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,RealWorld,(>=#),(/=#))
-import GHC.Exts ((+#),(-#))
+import GHC.Exts (MutableByteArray#,(+#),(-#))
 import GHC.ST (ST(ST))
+import Data.Bytes.Chunks (Chunks(..))
 
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
@@ -102,105 +97,31 @@ import qualified Data.Vector as V
 import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
 
--- | Run a builder. An accurate size hint is important for
--- good performance. The size hint should be slightly greater
--- than or equal to the actual size.
+-- | Run a builder.
 run ::
-     Int -- ^ Hint for upper bound on size
+     Int -- ^ Size of initial chunk (use 4080 if uncertain)
   -> Builder -- ^ Builder
-  -> ByteArray
-run hint b = runByteArrayST $ do
-  let go !n = do
-        arr <- PM.newByteArray n
-        pasteST b (MutableBytes arr 0 n) >>= \case
-          Nothing -> go (n + n + 16)
-          Just len -> do
-            shrinkMutableByteArray arr len
-            PM.unsafeFreezeByteArray arr
-  go (max hint 16)
+  -> Chunks
+run hint@(I# hint# ) (Builder f) = runST $ do
+  MutableByteArray buf0 <- PM.newByteArray hint
+  cs <- ST $ \s0 -> case f buf0 0# hint# Initial s0 of
+    (# s1, bufX, offX, _, csX #) ->
+      (# s1, Mutable bufX offX csX #)
+  commitsOntoChunks ChunksNil cs
 
--- | Variant of 'pasteArrayST' that runs in 'IO'.
-pasteArrayIO ::
-     MutableBytes RealWorld -- ^ Buffer
-  -> (a -> Builder) -- ^ Builder
-  -> V.Vector a -- ^ Elements to serialize
-  -> IO (V.Vector a, MutableBytes RealWorld) -- ^ Shifted vector, shifted buffer
-pasteArrayIO !arr f !xs = stToIO (pasteArrayST arr f xs)
-
--- | Fold over a vector, applying the builder to each element until
--- the buffer cannot accomodate any more.
-pasteArrayST ::
-     MutableBytes s -- ^ Buffer
-  -> (a -> Builder) -- ^ Builder
-  -> V.Vector a -- ^ Elements to serialize
-  -> ST s (V.Vector a, MutableBytes s) -- ^ Shifted vector, shifted buffer
-pasteArrayST (MutableBytes arr off0 len0) f !xs0 = do
-  let go !xs !ixBufA !lenBufA = if V.length xs > 0
-        then do
-          let a = V.unsafeHead xs
-          pasteST (f a) (MutableBytes arr ixBufA lenBufA) >>= \case
-            Nothing -> pure (xs,MutableBytes arr ixBufA lenBufA)
-            Just ixBufB ->
-              go (V.unsafeTail xs) ixBufB (lenBufA + (ixBufA - ixBufB))
-        else pure (xs,MutableBytes arr ixBufA lenBufA)
-  go xs0 off0 len0
-
--- | Paste the builder into the byte array starting at offset zero.
--- This repeatedly reallocates the byte array if it cannot accomodate
--- the builder, replaying the builder each time.
-pasteGrowST ::
-     Int -- ^ How many bytes to grow by at a time
-  -> Builder
-  -> MutableByteArrayOffset s
-     -- ^ Initial buffer, used linearly. Do not reuse this argument.
-  -> ST s (MutableByteArrayOffset s)
-     -- ^ Final buffer that accomodated the builder.
-pasteGrowST !n b !(MutableByteArrayOffset arr0 off0) = do
-  let go !arr !sz = pasteST b (MutableBytes arr off0 (sz - off0)) >>= \case
-        Nothing -> do
-          let szNext = sz + n
-          arrNext <- PM.resizeMutableByteArray arr szNext
-          go arrNext szNext
-        Just ix -> pure (MutableByteArrayOffset{array=arr,offset=ix})
-  go arr0 =<< PM.getSizeofMutableByteArray arr0
-
--- | Variant of 'pasteGrowST' that runs in 'IO'.
-pasteGrowIO ::
-     Int -- ^ How many bytes to grow by at a time
-  -> Builder
-  -> MutableByteArrayOffset RealWorld
-     -- ^ Initial buffer, used linearly. Do not reuse this argument.
-  -> IO (MutableByteArrayOffset RealWorld)
-     -- ^ Final buffer that accomodated the builder.
-pasteGrowIO !n b !arr = stToIO (pasteGrowST n b arr)
-
--- | Execute the builder, pasting its contents into a buffer.
--- If the buffer is not large enough, this returns 'Nothing'.
--- Otherwise, it returns the index in the buffer that follows
--- the payload just written.
-pasteST :: Builder -> MutableBytes s -> ST s (Maybe Int)
-{-# inline pasteST #-}
-pasteST (Builder f) (MutableBytes (MutableByteArray arr) (I# off) (I# len)) =
-  ST $ \s0 -> case f arr off len s0 of
-    (# s1, r #) -> if Exts.isTrue# (r /=# (-1#))
-      then (# s1, Just (I# r) #)
-      else (# s1, Nothing #)
-
--- | Variant of 'pasteST' that runs in 'IO'.
-pasteIO :: Builder -> MutableBytes RealWorld -> IO (Maybe Int)
-{-# inline pasteIO #-}
-pasteIO b m = stToIO (pasteST b m)
-
--- | Constructor for 'Builder' that works on a function with lifted
--- arguments instead of unlifted ones. This is just as unsafe as the
--- actual constructor.
-construct :: (forall s. MutableBytes s -> ST s (Maybe Int)) -> Builder
-construct f = Builder
-  $ \arr off len s0 ->
-    case unST (f (MutableBytes (MutableByteArray arr) (I# off) (I# len))) s0 of
-      (# s1, m #) -> case m of
-        Nothing -> (# s1, (-1#) #)
-        Just (I# n) -> (# s1, n #)
+-- Internal. This freezes all the mutable byte arrays in-place,
+-- so be careful. It also reverses the chunks since everything
+-- is backwards.
+commitsOntoChunks :: Chunks -> Commits s -> ST s Chunks
+commitsOntoChunks !xs Initial = pure xs
+commitsOntoChunks !xs (Immutable arr off len cs) =
+  commitsOntoChunks (ChunksCons (Bytes (ByteArray arr) (I# off) (I# len)) xs) cs
+commitsOntoChunks !xs (Mutable buf len cs) = case len of
+  0# -> commitsOntoChunks xs cs
+  _ -> do
+    shrinkMutableByteArray (MutableByteArray buf) (I# len)
+    arr <- PM.unsafeFreezeByteArray (MutableByteArray buf)
+    commitsOntoChunks (ChunksCons (Bytes arr 0 (I# len)) xs) cs
 
 -- | Convert a bounded builder to an unbounded one. If the size
 -- is a constant, use @Arithmetic.Nat.constant@ as the first argument
@@ -210,23 +131,34 @@ fromBounded ::
   -> Bounded.Builder n
   -> Builder
 {-# inline fromBounded #-}
-fromBounded n (UnsafeBounded.Builder f) = Builder $ \arr off len s0 ->
-  let !(I# req) = Nat.demote n in
-  case len >=# req of
-    1# -> f arr off s0
-    _ -> (# s0, (-1#) #)
+fromBounded n (UnsafeBounded.Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(I# req) = Nat.demote n
+      !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# req of
+        1# -> (# s0, buf0, off0, len0, cs0 #)
+        _ -> let !(I# lenX) = max 4080 (I# req) in
+          case Exts.newByteArray# lenX s0 of
+            (# sX, bufX #) ->
+              (# sX, bufX, 0#, lenX, Mutable buf0 off0 cs0 #)
+   in case f buf1 off1 s1 of
+        (# s2, off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
 
 -- | Create a builder from an unsliced byte sequence.
-bytearray :: ByteArray -> Builder
-bytearray a = bytes (Bytes a 0 (PM.sizeofByteArray a))
+byteArray :: ByteArray -> Builder
+byteArray a = bytes (Bytes a 0 (PM.sizeofByteArray a))
 
 -- | Create a builder from a sliced byte sequence.
 bytes :: Bytes -> Builder
-bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len >= slen
-  then do
-    PM.copyByteArray arr off src soff slen
-    pure (Just (off + slen))
-  else pure Nothing
+bytes (Bytes (ByteArray src# ) (I# soff# ) slen@(I# slen# )) = Builder
+  (\buf0 off0 len0 cs0 s0 -> if slen <= 1024
+    then case len0 >=# slen# of
+      1# -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
+        (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
+      _ -> case Exts.newByteArray# 4080# s0 of
+          (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 0# slen# s1 of
+            s2 -> (# s2, buf1, slen#, 4080# -# slen#, Mutable buf0 off0 cs0 #)
+    else case Exts.newByteArray# 0# s0 of
+      (# s1, buf1 #) -> (# s1, buf1, 0#, 0#, Immutable src# soff# slen# (Mutable buf0 off0 cs0) #)
+  )
 
 -- | Create a builder from a slice of an array of 'Word8'. There is the same
 -- as 'bytes' but is provided as a convenience for users working with different
@@ -238,31 +170,44 @@ word8Array (PrimArray arr) off len = bytes (Bytes (ByteArray arr) off len)
 -- byte sequence is UTF-8 encoded text.
 slicedUtf8TextJson :: ByteArray# -> Int# -> Int# -> Builder
 {-# inline slicedUtf8TextJson #-}
-slicedUtf8TextJson !src# !soff0# !slen0# = construct $ \(MutableBytes dst doff0 dlen0) ->
-  let slen0 = I# slen0#
-   in if dlen0 > (2 * slen0) + 2
-        then do
-          PM.writeByteArray dst doff0 (c2w '"')
-          let go !soff !slen !doff = if slen > 0
-                then case indexChar8Array (ByteArray src#) soff of
-                  '\\' -> write2 dst doff '\\' '\\' *> go (soff + 1) (slen - 1) (doff + 2)
-                  '\"' -> write2 dst doff '\\' '\"' *> go (soff + 1) (slen - 1) (doff + 2)
-                  '\n' -> write2 dst doff '\\' 'n' *> go (soff + 1) (slen - 1) (doff + 2)
-                  '\r' -> write2 dst doff '\\' 'r' *> go (soff + 1) (slen - 1) (doff + 2)
-                  '\t' -> write2 dst doff '\\' 't' *> go (soff + 1) (slen - 1) (doff + 2)
-                  c -> if c >= '\x20'
-                    then PM.writeByteArray dst doff (c2w c) *> go (soff + 1) (slen - 1) (doff + 1)
-                    else do
-                      write2 dst doff '\\' 'u'
-                      doff' <- UnsafeBounded.pasteST
-                        (Bounded.word16PaddedUpperHex (fromIntegral (c2w c)))
-                        dst (doff + 2)
-                      go (soff + 1) (slen - 1) doff'
-                else pure doff
-          doffRes <- go (I# soff0#) (I# slen0#) (doff0 + 1)
-          PM.writeByteArray dst doffRes (c2w '"')
-          pure (Just (doffRes + 1))
-        else pure Nothing
+slicedUtf8TextJson !src# !soff0# !slen0# = fromFunction reqLen $ \dst doff0 -> do
+  PM.writeByteArray dst doff0 (c2w '"')
+  let go !soff !slen !doff = if slen > 0
+        then case indexChar8Array (ByteArray src#) soff of
+          '\\' -> write2 dst doff '\\' '\\' *> go (soff + 1) (slen - 1) (doff + 2)
+          '\"' -> write2 dst doff '\\' '\"' *> go (soff + 1) (slen - 1) (doff + 2)
+          '\n' -> write2 dst doff '\\' 'n' *> go (soff + 1) (slen - 1) (doff + 2)
+          '\r' -> write2 dst doff '\\' 'r' *> go (soff + 1) (slen - 1) (doff + 2)
+          '\t' -> write2 dst doff '\\' 't' *> go (soff + 1) (slen - 1) (doff + 2)
+          c -> if c >= '\x20'
+            then PM.writeByteArray dst doff (c2w c) *> go (soff + 1) (slen - 1) (doff + 1)
+            else do
+              write2 dst doff '\\' 'u'
+              doff' <- UnsafeBounded.pasteST
+                (Bounded.word16PaddedUpperHex (fromIntegral (c2w c)))
+                dst (doff + 2)
+              go (soff + 1) (slen - 1) doff'
+        else pure doff
+  doffRes <- go (I# soff0#) (I# slen0#) (doff0 + 1)
+  PM.writeByteArray dst doffRes (c2w '"')
+  pure (doffRes + 1)
+  where
+  slen0 = I# slen0#
+  reqLen = (2 * slen0) + 2
+
+-- | Constructor for 'Builder' that works on a function with lifted
+-- arguments instead of unlifted ones. This is just as unsafe as the
+-- actual constructor.
+fromFunction :: Int -> (forall s. MutableByteArray s -> Int -> ST s Int) -> Builder
+fromFunction (I# req) f = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# req of
+        1# -> (# s0, buf0, off0, len0, cs0 #)
+        _ -> let !(I# lenX) = max 4080 (I# req) in
+          case Exts.newByteArray# lenX s0 of
+            (# sX, bufX #) ->
+              (# sX, bufX, 0#, lenX, Mutable buf0 off0 cs0 #)
+   in case unST (f (MutableByteArray buf1) (I# off1)) s1 of
+        (# s2, I# off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
 
 -- Internal. Write two characters in the ASCII plane to a byte array.
 write2 :: MutableByteArray s -> Int -> Char -> Char -> ST s ()
@@ -490,35 +435,54 @@ word8 w = fromBounded Nat.constant (Bounded.word8 w)
 -- However, using 'consLength32BE' is much more efficient here
 -- since it only materializes the 'ByteArray' once.
 consLength32BE :: Builder -> Builder
-consLength32BE (Builder f) = Builder $ \arr off len s0 -> case len >=# 4# of
-  1# -> case f arr (off +# 4# ) (len -# 4# ) s0 of
-    (# s1, r #) -> case r of
-      (-1#) -> (# s1, (-1#) #)
-      _ ->
-        let ST g = UnsafeBounded.pasteST
-              (Bounded.word32BE (fromIntegral ((I# r - I# off) - 4)))
-              (MutableByteArray arr)
-              (I# off)
-         in case g s1 of
-              (# s2, _ #) -> (# s2, r #)
-  _ -> (# s0, (-1#) #)
+consLength32BE (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# 4# of
+        1# -> (# s0, buf0, off0, len0, cs0 #)
+        _ -> case Exts.newByteArray# 4080# s0 of
+          (# sX, bufX #) ->
+            (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
+   in case f buf1 (off1 +# 4# ) (len1 -# 4# ) cs1 s1 of
+        (# s2, buf2, off2, len2, cs2 #) ->
+          let !dist = case Exts.sameMutableByteArray# buf1 buf2 of
+                1# -> off2 -# off1
+                _ -> commitDistance buf1 off2 cs2 -# off1
+              ST g = UnsafeBounded.pasteST
+                (Bounded.word32BE (fromIntegral (I# (dist -# 4# ))))
+                (MutableByteArray buf1)
+                (I# off1)
+           in case g s2 of
+                (# s3, _ #) -> (# s3, buf2, off2, len2, cs2 #)
 
 
 -- | Prefix a builder with its size in bytes. This size is
 -- presented as a big-endian 64-bit word. See 'consLength32BE'.
 consLength64BE :: Builder -> Builder
-consLength64BE (Builder f) = Builder $ \arr off len s0 -> case len >=# 8# of
-  1# -> case f arr (off +# 8# ) (len -# 8# ) s0 of
-    (# s1, r #) -> case r of
-      (-1#) -> (# s1, (-1#) #)
-      _ ->
-        let ST g = UnsafeBounded.pasteST
-              (Bounded.word64BE (fromIntegral ((I# r - I# off) - 8)))
-              (MutableByteArray arr)
-              (I# off)
-         in case g s1 of
-              (# s2, _ #) -> (# s2, r #)
-  _ -> (# s0, (-1#) #)
+consLength64BE (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# 8# of
+        1# -> (# s0, buf0, off0, len0, cs0 #)
+        _ -> case Exts.newByteArray# 4080# s0 of
+          (# sX, bufX #) ->
+            (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
+   in case f buf1 (off1 +# 8# ) (len1 -# 8# ) cs1 s1 of
+        (# s2, buf2, off2, len2, cs2 #) ->
+          let !dist = case Exts.sameMutableByteArray# buf1 buf2 of
+                1# -> off2 -# off1
+                _ -> commitDistance buf1 off2 cs2 -# off1
+              ST g = UnsafeBounded.pasteST
+                (Bounded.word64BE (fromIntegral (I# (dist -# 8# ))))
+                (MutableByteArray buf1)
+                (I# off1)
+           in case g s2 of
+                (# s3, _ #) -> (# s3, buf2, off2, len2, cs2 #)
+
+commitDistance :: MutableByteArray# s -> Int# -> Commits s -> Int#
+commitDistance _ !_ Initial = error "chunkDistance: chunk not found"
+commitDistance target !n (Immutable _ _ len cs) =
+  commitDistance target (n +# len) cs
+commitDistance target !n (Mutable buf len cs) =
+  case Exts.sameMutableByteArray# target buf of
+    1# -> n +# len
+    _ -> commitDistance target (n +# len) cs
 
 -- ShortText is already UTF-8 encoded. This is a no-op.
 shortTextToByteArray :: ShortText -> ByteArray

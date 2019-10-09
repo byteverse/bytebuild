@@ -36,6 +36,7 @@ flag checked
 
 library
   exposed-modules:
+    Data.Bytes.Chunks
     Data.ByteArray.Builder
     Data.ByteArray.Builder.Unsafe
     Data.ByteArray.Builder.Bounded
