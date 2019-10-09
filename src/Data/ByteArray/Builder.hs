@@ -143,6 +143,10 @@ fromBounded n (UnsafeBounded.Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
    in case f buf1 off1 s1 of
         (# s2, off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
 
+-- This is a micro-optimization that uses an equality check instead
+-- of an inequality check when the required number of bytes is one.
+-- Use this instead of fromBounded (where possible) leads to marginally
+-- better results in benchmarks.
 fromBoundedOne ::
      Bounded.Builder 1
   -> Builder
