@@ -35,6 +35,7 @@ expectedSmall :: ByteArray
 expectedSmall = Bytes.toByteArray $ Bytes.fromAsciiString
   "((AB59,(1F33,2E71)),((((FA9A,247B),890C),(0F13,((55BF,7CF1),389B))),1205))"
 
+
 exampleSmall :: Word16Tree
 exampleSmall = Branch
   (Branch

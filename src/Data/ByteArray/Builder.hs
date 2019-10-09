@@ -1,4 +1,5 @@
 {-# language BangPatterns #-}
+{-# language DataKinds #-}
 {-# language DuplicateRecordFields #-}
 {-# language LambdaCase #-}
 {-# language MagicHash #-}
@@ -139,6 +140,19 @@ fromBounded n (UnsafeBounded.Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
           case Exts.newByteArray# lenX s0 of
             (# sX, bufX #) ->
               (# sX, bufX, 0#, lenX, Mutable buf0 off0 cs0 #)
+   in case f buf1 off1 s1 of
+        (# s2, off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
+
+fromBoundedOne ::
+     Bounded.Builder 1
+  -> Builder
+{-# inline fromBoundedOne #-}
+fromBoundedOne (UnsafeBounded.Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(# s1, buf1, off1, len1, cs1 #) = case len0 of
+        0# -> case Exts.newByteArray# 4080# s0 of
+          (# sX, bufX #) ->
+            (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
+        _ -> (# s0, buf0, off0, len0, cs0 #)
    in case f buf1 off1 s1 of
         (# s2, off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
 
@@ -420,7 +434,7 @@ word16BE w = fromBounded Nat.constant (Bounded.word16BE w)
 
 -- | Requires exactly 1 byte.
 word8 :: Word8 -> Builder
-word8 w = fromBounded Nat.constant (Bounded.word8 w)
+word8 w = fromBoundedOne (Bounded.word8 w)
 
 -- | Prefix a builder with its size in bytes. This size is
 -- presented as a big-endian 32-bit word. The need to prefix
