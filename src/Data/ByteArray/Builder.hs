@@ -85,7 +85,7 @@ import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.Text.Short (ShortText)
 import Data.Word (Word64,Word32,Word16,Word8)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,RealWorld,(>=#),(/=#))
-import GHC.Exts (MutableByteArray#,(+#),(-#))
+import GHC.Exts (MutableByteArray#,(+#),(-#),(<#))
 import GHC.ST (ST(ST))
 import Data.Bytes.Chunks (Chunks(..))
 
@@ -167,15 +167,15 @@ byteArray a = bytes (Bytes a 0 (PM.sizeofByteArray a))
 -- | Create a builder from a sliced byte sequence.
 bytes :: Bytes -> Builder
 bytes (Bytes (ByteArray src# ) (I# soff# ) slen@(I# slen# )) = Builder
-  (\buf0 off0 len0 cs0 s0 -> if slen <= 1024
-    then case len0 >=# slen# of
-      1# -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
-        (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
-      _ -> case Exts.newByteArray# 4080# s0 of
+  (\buf0 off0 len0 cs0 s0 -> if slen >= 1024
+    then case Exts.newByteArray# 0# s0 of
+      (# s1, buf1 #) -> (# s1, buf1, 0#, 0#, Immutable src# soff# slen# (Mutable buf0 off0 cs0) #)
+    else case len0 <# slen# of
+      1# -> case Exts.newByteArray# 4080# s0 of
           (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 0# slen# s1 of
             s2 -> (# s2, buf1, slen#, 4080# -# slen#, Mutable buf0 off0 cs0 #)
-    else case Exts.newByteArray# 0# s0 of
-      (# s1, buf1 #) -> (# s1, buf1, 0#, 0#, Immutable src# soff# slen# (Mutable buf0 off0 cs0) #)
+      _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
+        (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
   )
 
 -- | Create a builder from a slice of an array of 'Word8'. There is the same
