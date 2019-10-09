@@ -4,6 +4,8 @@
 
 * Introduce `consLensBE32` for efficient serialization of wire protocols
   that require prefixing a payload with its length.
+* Add `int64BE` as a convenience.
+* Add little-endian encoding functions for `Word16`, `Word32`, and `Word64`.
 
 ## 0.2.1.0 -- 2019-09-05
 

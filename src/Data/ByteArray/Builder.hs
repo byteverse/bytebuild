@@ -54,10 +54,20 @@ module Data.ByteArray.Builder
   , ascii
   , char
     -- ** Machine-Readable
+    -- *** One
+  , word8
+    -- **** Big Endian
   , word64BE
   , word32BE
   , word16BE
-  , word8
+  , int64BE
+    -- **** Little Endian
+  , word64LE
+  , word32LE
+  , word16LE
+  , int64LE
+    -- *** Many
+  , word8Array
     -- ** Prefixing with Length
   , consLength32BE
   , consLength64BE
@@ -75,7 +85,7 @@ import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
 import Data.Char (ord)
 import Data.Int (Int64,Int32,Int16,Int8)
-import Data.Primitive (ByteArray(..),MutableByteArray(..))
+import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.Text.Short (ShortText)
 import Data.Word (Word64,Word32,Word16,Word8)
@@ -217,6 +227,12 @@ bytes (Bytes src soff slen) = construct $ \(MutableBytes arr off len) -> if len 
     PM.copyByteArray arr off src soff slen
     pure (Just (off + slen))
   else pure Nothing
+
+-- | Create a builder from a slice of an array of 'Word8'. There is the same
+-- as 'bytes' but is provided as a convenience for users working with different
+-- types.
+word8Array :: PrimArray Word8 -> Int -> Int -> Builder
+word8Array (PrimArray arr) off len = bytes (Bytes (ByteArray arr) off len)
 
 -- Internal function. Precondition, the referenced slice of the
 -- byte sequence is UTF-8 encoded text.
@@ -416,6 +432,31 @@ unST (ST f) = f
 shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
 shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
   primitive_ (Exts.shrinkMutableByteArray# arr sz)
+
+-- | Requires exactly 8 bytes. Dump the octets of a 64-bit
+-- signed integer in a little-endian fashion.
+int64LE :: Int64 -> Builder
+int64LE w = fromBounded Nat.constant (Bounded.int64LE w)
+
+-- | Requires exactly 8 bytes. Dump the octets of a 64-bit
+-- signed integer in a big-endian fashion.
+int64BE :: Int64 -> Builder
+int64BE w = fromBounded Nat.constant (Bounded.int64BE w)
+
+-- | Requires exactly 8 bytes. Dump the octets of a 64-bit
+-- word in a little-endian fashion.
+word64LE :: Word64 -> Builder
+word64LE w = fromBounded Nat.constant (Bounded.word64LE w)
+
+-- | Requires exactly 4 bytes. Dump the octets of a 32-bit
+-- word in a little-endian fashion.
+word32LE :: Word32 -> Builder
+word32LE w = fromBounded Nat.constant (Bounded.word32LE w)
+
+-- | Requires exactly 2 bytes. Dump the octets of a 16-bit
+-- word in a little-endian fashion.
+word16LE :: Word16 -> Builder
+word16LE w = fromBounded Nat.constant (Bounded.word16LE w)
 
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a big-endian fashion.

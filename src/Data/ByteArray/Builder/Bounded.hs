@@ -52,10 +52,18 @@ module Data.ByteArray.Builder.Bounded
   , ascii
   , char
     -- ** Machine-Readable
+    -- *** One
+  , word8
+    -- **** Big Endian
   , word64BE
   , word32BE
   , word16BE
-  , word8
+  , int64BE
+    -- **** Little Endian
+  , word64LE
+  , word32LE
+  , word16LE
+  , int64LE
     -- * Encode Floating-Point Types
   , doubleDec
   ) where
@@ -579,6 +587,26 @@ char c
     byteFourFour :: Word -> Word
     byteFourFour w = (0b00111111 .&. w) .|. 0b10000000
 
+int64BE :: Int64 -> Builder 8
+int64BE (I64# i) = word64BE (W64# (int2Word# i))
+
+int64LE :: Int64 -> Builder 8
+int64LE (I64# i) = word64LE (W64# (int2Word# i))
+
+-- | Requires exactly 8 bytes. Dump the octets of a 64-bit
+-- word in a little-endian fashion.
+word64LE :: Word64 -> Builder 8
+word64LE w = Unsafe.construct $ \arr off -> do
+  writeByteArray arr (off + 7) (fromIntegral @Word64 @Word8 (unsafeShiftR w 56))
+  writeByteArray arr (off + 6) (fromIntegral @Word64 @Word8 (unsafeShiftR w 48))
+  writeByteArray arr (off + 5) (fromIntegral @Word64 @Word8 (unsafeShiftR w 40))
+  writeByteArray arr (off + 4) (fromIntegral @Word64 @Word8 (unsafeShiftR w 32))
+  writeByteArray arr (off + 3) (fromIntegral @Word64 @Word8 (unsafeShiftR w 24))
+  writeByteArray arr (off + 2) (fromIntegral @Word64 @Word8 (unsafeShiftR w 16))
+  writeByteArray arr (off + 1) (fromIntegral @Word64 @Word8 (unsafeShiftR w 8))
+  writeByteArray arr (off    ) (fromIntegral @Word64 @Word8 w)
+  pure (off + 8)
+
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a big-endian fashion.
 word64BE :: Word64 -> Builder 8
@@ -594,6 +622,16 @@ word64BE w = Unsafe.construct $ \arr off -> do
   pure (off + 8)
 
 -- | Requires exactly 4 bytes. Dump the octets of a 32-bit
+-- word in a little-endian fashion.
+word32LE :: Word32 -> Builder 4
+word32LE w = Unsafe.construct $ \arr off -> do
+  writeByteArray arr (off + 3) (fromIntegral @Word32 @Word8 (unsafeShiftR w 24))
+  writeByteArray arr (off + 2) (fromIntegral @Word32 @Word8 (unsafeShiftR w 16))
+  writeByteArray arr (off + 1) (fromIntegral @Word32 @Word8 (unsafeShiftR w 8))
+  writeByteArray arr (off    ) (fromIntegral @Word32 @Word8 w)
+  pure (off + 4)
+
+-- | Requires exactly 4 bytes. Dump the octets of a 32-bit
 -- word in a big-endian fashion.
 word32BE :: Word32 -> Builder 4
 word32BE w = Unsafe.construct $ \arr off -> do
@@ -602,6 +640,14 @@ word32BE w = Unsafe.construct $ \arr off -> do
   writeByteArray arr (off + 2) (fromIntegral @Word32 @Word8 (unsafeShiftR w 8))
   writeByteArray arr (off + 3) (fromIntegral @Word32 @Word8 w)
   pure (off + 4)
+
+-- | Requires exactly 2 bytes. Dump the octets of a 16-bit
+-- word in a little-endian fashion.
+word16LE :: Word16 -> Builder 2
+word16LE w = Unsafe.construct $ \arr off -> do
+  writeByteArray arr (off + 1) (fromIntegral @Word16 @Word8 (unsafeShiftR w 8))
+  writeByteArray arr (off    ) (fromIntegral @Word16 @Word8 w)
+  pure (off + 2)
 
 -- | Requires exactly 2 bytes. Dump the octets of a 16-bit
 -- word in a big-endian fashion.
