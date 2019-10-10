@@ -59,11 +59,15 @@ module Data.ByteArray.Builder.Bounded
   , word32BE
   , word16BE
   , int64BE
+  , int32BE
+  , int16BE
     -- **** Little Endian
   , word64LE
   , word32LE
   , word16LE
   , int64LE
+  , int32LE
+  , int16LE
     -- * Encode Floating-Point Types
   , doubleDec
   ) where
@@ -590,8 +594,20 @@ char c
 int64BE :: Int64 -> Builder 8
 int64BE (I64# i) = word64BE (W64# (int2Word# i))
 
+int32BE :: Int32 -> Builder 4
+int32BE (I32# i) = word32BE (W32# (int2Word# i))
+
+int16BE :: Int16 -> Builder 2
+int16BE (I16# i) = word16BE (W16# (int2Word# i))
+
 int64LE :: Int64 -> Builder 8
 int64LE (I64# i) = word64LE (W64# (int2Word# i))
+
+int32LE :: Int32 -> Builder 4
+int32LE (I32# i) = word32LE (W32# (int2Word# i))
+
+int16LE :: Int16 -> Builder 2
+int16LE (I16# i) = word16LE (W16# (int2Word# i))
 
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a little-endian fashion.

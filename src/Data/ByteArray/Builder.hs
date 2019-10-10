@@ -57,21 +57,31 @@ module Data.ByteArray.Builder
   , word32BE
   , word16BE
   , int64BE
+  , int32BE
+  , int16BE
     -- **** Little Endian
   , word64LE
   , word32LE
   , word16LE
   , int64LE
+  , int32LE
+  , int16LE
     -- *** Many
   , word8Array
     -- **** Big Endian
   , word16ArrayBE
   , word32ArrayBE
   , word64ArrayBE
+  , int64ArrayBE
+  , int32ArrayBE
+  , int16ArrayBE
     -- **** Little Endian
   , word16ArrayLE
   , word32ArrayLE
   , word64ArrayLE
+  , int64ArrayLE
+  , int32ArrayLE
+  , int16ArrayLE
     -- ** Prefixing with Length
   , consLength32BE
   , consLength64BE
@@ -227,6 +237,24 @@ insert (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
 -- types.
 word8Array :: PrimArray Word8 -> Int -> Int -> Builder
 word8Array (PrimArray arr) off len = bytes (Bytes (ByteArray arr) off len)
+
+int64ArrayLE :: PrimArray Int64 -> Int -> Int -> Builder
+int64ArrayLE (PrimArray x) = word64ArrayLE (PrimArray x)
+
+int64ArrayBE :: PrimArray Int64 -> Int -> Int -> Builder
+int64ArrayBE (PrimArray x) = word64ArrayBE (PrimArray x)
+
+int32ArrayLE :: PrimArray Int32 -> Int -> Int -> Builder
+int32ArrayLE (PrimArray x) = word32ArrayLE (PrimArray x)
+
+int32ArrayBE :: PrimArray Int32 -> Int -> Int -> Builder
+int32ArrayBE (PrimArray x) = word32ArrayBE (PrimArray x)
+
+int16ArrayLE :: PrimArray Int16 -> Int -> Int -> Builder
+int16ArrayLE (PrimArray x) = word16ArrayLE (PrimArray x)
+
+int16ArrayBE :: PrimArray Int16 -> Int -> Int -> Builder
+int16ArrayBE (PrimArray x) = word16ArrayBE (PrimArray x)
 
 word64ArrayLE :: PrimArray Word64 -> Int -> Int -> Builder
 word64ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
@@ -536,10 +564,30 @@ shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
 int64LE :: Int64 -> Builder
 int64LE w = fromBounded Nat.constant (Bounded.int64LE w)
 
+-- | Requires exactly 4 bytes. Dump the octets of a 32-bit
+-- signed integer in a little-endian fashion.
+int32LE :: Int32 -> Builder
+int32LE w = fromBounded Nat.constant (Bounded.int32LE w)
+
+-- | Requires exactly 2 bytes. Dump the octets of a 16-bit
+-- signed integer in a little-endian fashion.
+int16LE :: Int16 -> Builder
+int16LE w = fromBounded Nat.constant (Bounded.int16LE w)
+
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- signed integer in a big-endian fashion.
 int64BE :: Int64 -> Builder
 int64BE w = fromBounded Nat.constant (Bounded.int64BE w)
+
+-- | Requires exactly 4 bytes. Dump the octets of a 32-bit
+-- signed integer in a big-endian fashion.
+int32BE :: Int32 -> Builder
+int32BE w = fromBounded Nat.constant (Bounded.int32BE w)
+
+-- | Requires exactly 2 bytes. Dump the octets of a 16-bit
+-- signed integer in a big-endian fashion.
+int16BE :: Int16 -> Builder
+int16BE w = fromBounded Nat.constant (Bounded.int16BE w)
 
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a little-endian fashion.
