@@ -6,6 +6,8 @@
   that require prefixing a payload with its length.
 * Add `int64BE` as a convenience.
 * Add little-endian encoding functions for `Word16`, `Word32`, and `Word64`.
+* Add big-endian and little-endian functions for copying a
+  `PrimArray` of numbers into a builder.
 * Add `flush`, `copy`, and `insert` for better control when
   converting byte sequences to builders.
 

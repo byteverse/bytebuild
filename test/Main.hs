@@ -4,8 +4,8 @@
 {-# language OverloadedStrings #-}
 
 import Control.Monad.ST (runST)
-import Data.Bytes.Types (MutableBytes(..))
 import Data.ByteArray.Builder
+import Data.Primitive (PrimArray)
 import Data.Word
 import Data.Char (ord,chr)
 import Data.Primitive (ByteArray)
@@ -134,6 +134,36 @@ tests = testGroup "Tests"
                 byteArray d <> byteArray e <> byteArray f <>
                 byteArray g <> byteArray h <> byteArray i
               )
+    , TQC.testProperty "word16ArrayLE" $ \(xs :: [Word16]) ->
+        let ys = Exts.fromList xs :: PrimArray Word16
+         in runConcat 1 (foldMap word16LE xs)
+            ===
+            runConcat 1 (word16ArrayLE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word16ArrayBE" $ \(xs :: [Word16]) ->
+        let ys = Exts.fromList xs :: PrimArray Word16
+         in runConcat 1 (foldMap word16BE xs)
+            ===
+            runConcat 1 (word16ArrayBE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word32ArrayLE" $ \(xs :: [Word32]) ->
+        let ys = Exts.fromList xs :: PrimArray Word32
+         in runConcat 1 (foldMap word32LE xs)
+            ===
+            runConcat 1 (word32ArrayLE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word32ArrayBE" $ \(xs :: [Word32]) ->
+        let ys = Exts.fromList xs :: PrimArray Word32
+         in runConcat 1 (foldMap word32BE xs)
+            ===
+            runConcat 1 (word32ArrayBE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word64ArrayLE" $ \(xs :: [Word64]) ->
+        let ys = Exts.fromList xs :: PrimArray Word64
+         in runConcat 1 (foldMap word64LE xs)
+            ===
+            runConcat 1 (word64ArrayLE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word64ArrayBE" $ \(xs :: [Word64]) ->
+        let ys = Exts.fromList xs :: PrimArray Word64
+         in runConcat 1 (foldMap word64BE xs)
+            ===
+            runConcat 1 (word64ArrayBE ys 0 (Prelude.length xs))
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->

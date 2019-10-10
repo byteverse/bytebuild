@@ -64,8 +64,14 @@ module Data.ByteArray.Builder
   , int64LE
     -- *** Many
   , word8Array
+    -- **** Big Endian
+  , word16ArrayBE
+  , word32ArrayBE
+  , word64ArrayBE
     -- **** Little Endian
   , word16ArrayLE
+  , word32ArrayLE
+  , word64ArrayLE
     -- ** Prefixing with Length
   , consLength32BE
   , consLength64BE
@@ -222,19 +228,96 @@ insert (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
 word8Array :: PrimArray Word8 -> Int -> Int -> Builder
 word8Array (PrimArray arr) off len = bytes (Bytes (ByteArray arr) off len)
 
+word64ArrayLE :: PrimArray Word64 -> Int -> Int -> Builder
+word64ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  LittleEndian -> bytes (Bytes (ByteArray arr) (soff0 * 8) (slen0 * 8))
+  BigEndian -> word64ArraySwap src soff0 slen0
+
+word64ArrayBE :: PrimArray Word64 -> Int -> Int -> Builder
+word64ArrayBE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  BigEndian -> bytes (Bytes (ByteArray arr) (soff0 * 8) (slen0 * 8))
+  LittleEndian -> word64ArraySwap src soff0 slen0
+
+word32ArrayLE :: PrimArray Word32 -> Int -> Int -> Builder
+word32ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  LittleEndian -> bytes (Bytes (ByteArray arr) (soff0 * 4) (slen0 * 4))
+  BigEndian -> word32ArraySwap src soff0 slen0
+
+word32ArrayBE :: PrimArray Word32 -> Int -> Int -> Builder
+word32ArrayBE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  BigEndian -> bytes (Bytes (ByteArray arr) (soff0 * 4) (slen0 * 4))
+  LittleEndian -> word32ArraySwap src soff0 slen0
+
 word16ArrayLE :: PrimArray Word16 -> Int -> Int -> Builder
 word16ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
   LittleEndian -> bytes (Bytes (ByteArray arr) (soff0 * 2) (slen0 * 2))
-  BigEndian -> fromFunction (slen0 * 2) (go soff0 (soff0 + slen0))
+  BigEndian -> word16ArraySwap src soff0 slen0
+
+word16ArrayBE :: PrimArray Word16 -> Int -> Int -> Builder
+word16ArrayBE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  BigEndian -> bytes (Bytes (ByteArray arr) (soff0 * 2) (slen0 * 2))
+  LittleEndian -> word16ArraySwap src soff0 slen0
+
+word16ArraySwap :: PrimArray Word16 -> Int -> Int -> Builder
+word16ArraySwap src soff0 slen0 =
+  fromFunction (slen0 * 2) (go (soff0 * 2) ((soff0 + slen0) * 2))
   where
   go :: Int -> Int -> MutableByteArray s -> Int -> ST s Int
   go !soff !send !dst !doff = if soff < send
     then do
-      doff' <- UnsafeBounded.pasteST
-        (Bounded.word16LE (PM.indexPrimArray src soff))
-        dst doff
-      go (soff + 1) send dst doff'
+      let v0 = PM.indexPrimArray (asWord8s src) soff
+          v1 = PM.indexPrimArray (asWord8s src) (soff + 1)
+      PM.writeByteArray dst doff v1
+      PM.writeByteArray dst (doff + 1) v0
+      go (soff + 2) send dst (doff + 2)
     else pure doff
+
+word32ArraySwap :: PrimArray Word32 -> Int -> Int -> Builder
+word32ArraySwap src soff0 slen0 =
+  fromFunction (slen0 * 4) (go (soff0 * 4) ((soff0 + slen0) * 4))
+  where
+  go :: Int -> Int -> MutableByteArray s -> Int -> ST s Int
+  go !soff !send !dst !doff = if soff < send
+    then do
+      let v0 = PM.indexPrimArray (asWord8s src) soff
+          v1 = PM.indexPrimArray (asWord8s src) (soff + 1)
+          v2 = PM.indexPrimArray (asWord8s src) (soff + 2)
+          v3 = PM.indexPrimArray (asWord8s src) (soff + 3)
+      PM.writeByteArray dst doff v3
+      PM.writeByteArray dst (doff + 1) v2
+      PM.writeByteArray dst (doff + 2) v1
+      PM.writeByteArray dst (doff + 3) v0
+      go (soff + 4) send dst (doff + 4)
+    else pure doff
+
+word64ArraySwap :: PrimArray Word64 -> Int -> Int -> Builder
+word64ArraySwap src soff0 slen0 =
+  fromFunction (slen0 * 8) (go (soff0 * 8) ((soff0 + slen0) * 8))
+  where
+  go :: Int -> Int -> MutableByteArray s -> Int -> ST s Int
+  go !soff !send !dst !doff = if soff < send
+    then do
+      let v0 = PM.indexPrimArray (asWord8s src) soff
+          v1 = PM.indexPrimArray (asWord8s src) (soff + 1)
+          v2 = PM.indexPrimArray (asWord8s src) (soff + 2)
+          v3 = PM.indexPrimArray (asWord8s src) (soff + 3)
+          v4 = PM.indexPrimArray (asWord8s src) (soff + 4)
+          v5 = PM.indexPrimArray (asWord8s src) (soff + 5)
+          v6 = PM.indexPrimArray (asWord8s src) (soff + 6)
+          v7 = PM.indexPrimArray (asWord8s src) (soff + 7)
+      PM.writeByteArray dst doff v7
+      PM.writeByteArray dst (doff + 1) v6
+      PM.writeByteArray dst (doff + 2) v5
+      PM.writeByteArray dst (doff + 3) v4
+      PM.writeByteArray dst (doff + 4) v3
+      PM.writeByteArray dst (doff + 5) v2
+      PM.writeByteArray dst (doff + 6) v1
+      PM.writeByteArray dst (doff + 7) v0
+      go (soff + 8) send dst (doff + 8)
+    else pure doff
+
+asWord8s :: PrimArray a -> PrimArray Word8
+asWord8s (PrimArray x) = PrimArray x
 
 -- Internal function. Precondition, the referenced slice of the
 -- byte sequence is UTF-8 encoded text.
