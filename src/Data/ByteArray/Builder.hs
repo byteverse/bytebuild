@@ -15,6 +15,8 @@ module Data.ByteArray.Builder
   , run
     -- * Materialized Byte Sequences
   , bytes
+  , copy
+  , insert
   , byteArray
   , shortTextUtf8
   , shortTextJsonString
@@ -62,39 +64,41 @@ module Data.ByteArray.Builder
   , int64LE
     -- *** Many
   , word8Array
+    -- **** Little Endian
+  , word16ArrayLE
     -- ** Prefixing with Length
   , consLength32BE
   , consLength64BE
     -- * Encode Floating-Point Types
     -- ** Human-Readable
   , doubleDec
+    -- * Control
+  , flush
   ) where
 
 import Control.Monad.Primitive (primitive_)
-import Control.Monad.ST (ST,stToIO,runST)
-import Control.Monad.ST.Run (runByteArrayST)
+import Control.Monad.ST (ST,runST)
 import Data.ByteArray.Builder.Unsafe (Builder(Builder))
 import Data.ByteArray.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
-import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
+import Data.Bytes.Types (Bytes(Bytes))
 import Data.Char (ord)
 import Data.Int (Int64,Int32,Int16,Int8)
 import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
-import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.Text.Short (ShortText)
 import Data.Word (Word64,Word32,Word16,Word8)
-import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,RealWorld,(>=#),(/=#))
+import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (MutableByteArray#,(+#),(-#),(<#))
 import GHC.ST (ST(ST))
 import Data.Bytes.Chunks (Chunks(..))
+import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
 import qualified GHC.Exts as Exts
 import qualified Data.Text.Short as TS
 import qualified Data.Primitive as PM
-import qualified Data.Vector as V
 import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
 
@@ -164,18 +168,52 @@ fromBoundedOne (UnsafeBounded.Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
 byteArray :: ByteArray -> Builder
 byteArray a = bytes (Bytes a 0 (PM.sizeofByteArray a))
 
--- | Create a builder from a sliced byte sequence.
+-- | Create a builder from a sliced byte sequence. The variants
+-- 'copy' and 'insert' provide more control over whether or not
+-- the byte sequence is copied or aliased. This function is preferred
+-- when the user does not know the size of the byte sequence.
 bytes :: Bytes -> Builder
-bytes (Bytes (ByteArray src# ) (I# soff# ) slen@(I# slen# )) = Builder
-  (\buf0 off0 len0 cs0 s0 -> if slen >= 1024
-    then case Exts.newByteArray# 0# s0 of
-      (# s1, buf1 #) -> (# s1, buf1, 0#, 0#, Immutable src# soff# slen# (Mutable buf0 off0 cs0) #)
-    else case len0 <# slen# of
-      1# -> case Exts.newByteArray# 4080# s0 of
-          (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 0# slen# s1 of
-            s2 -> (# s2, buf1, slen#, 4080# -# slen#, Mutable buf0 off0 cs0 #)
-      _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
-        (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
+bytes (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
+  -- There are three cases to consider: (1) there is not enough
+  -- space and (1a) the chunk is not small or (1b) the chunk is
+  -- small; (2) There is enough space for a copy.
+  (\buf0 off0 len0 cs0 s0 -> case len0 <# slen# of
+    1# -> case slen# >=# 256# of
+      1# -> case Exts.newByteArray# 0# s0 of
+        (# s1, buf1 #) -> (# s1, buf1, 0#, 0#, Immutable src# soff# slen# (Mutable buf0 off0 cs0) #)
+      _ -> case Exts.newByteArray# 4080# s0 of
+        (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 0# slen# s1 of
+          s2 -> (# s2, buf1, slen#, 4080# -# slen#, Mutable buf0 off0 cs0 #)
+    _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
+      (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
+  )
+
+-- | Create a builder from a byte sequence. This always results in a
+-- call to @memcpy@. This is beneficial when the byte sequence is
+-- known to be small (less than 256 bytes).
+copy :: Bytes -> Builder
+copy (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
+  (\buf0 off0 len0 cs0 s0 -> case len0 <# slen# of
+    1# -> case Exts.newByteArray# newSz s0 of
+        (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 0# slen# s1 of
+          s2 -> (# s2, buf1, slen#, newSz -# slen#, Mutable buf0 off0 cs0 #)
+    _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
+      (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
+  )
+  where
+  !(I# newSz) = max (I# slen#) 4080
+
+-- | Create a builder from a byte sequence. This never calls @memcpy@.
+-- Instead, it pushes a chunk that references the argument byte sequence.
+-- This wastes the remaining space in the active chunk, so it may adversely
+-- affect performance if used carelessly. See 'flush' for a way to mitigate
+-- this problem. This functions is most beneficial when the byte sequence
+-- is known to be large (more than 8192 bytes).
+insert :: Bytes -> Builder
+insert (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
+  (\buf0 off0 _ cs0 s0 -> case Exts.newByteArray# 0# s0 of
+    (# s1, buf1 #) ->
+      (# s1, buf1, 0#, 0#, Immutable src# soff# slen# (Mutable buf0 off0 cs0) #)
   )
 
 -- | Create a builder from a slice of an array of 'Word8'. There is the same
@@ -183,6 +221,20 @@ bytes (Bytes (ByteArray src# ) (I# soff# ) slen@(I# slen# )) = Builder
 -- types.
 word8Array :: PrimArray Word8 -> Int -> Int -> Builder
 word8Array (PrimArray arr) off len = bytes (Bytes (ByteArray arr) off len)
+
+word16ArrayLE :: PrimArray Word16 -> Int -> Int -> Builder
+word16ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  LittleEndian -> bytes (Bytes (ByteArray arr) (soff0 * 2) (slen0 * 2))
+  BigEndian -> fromFunction (slen0 * 2) (go soff0 (soff0 + slen0))
+  where
+  go :: Int -> Int -> MutableByteArray s -> Int -> ST s Int
+  go !soff !send !dst !doff = if soff < send
+    then do
+      doff' <- UnsafeBounded.pasteST
+        (Bounded.word16LE (PM.indexPrimArray src soff))
+        dst doff
+      go (soff + 1) send dst doff'
+    else pure doff
 
 -- Internal function. Precondition, the referenced slice of the
 -- byte sequence is UTF-8 encoded text.
@@ -501,6 +553,25 @@ commitDistance target !n (Mutable buf len cs) =
   case Exts.sameMutableByteArray# target buf of
     1# -> n +# len
     _ -> commitDistance target (n +# len) cs
+
+-- | Push the buffer currently being filled onto the chunk list,
+-- allocating a new active buffer of the requested size. This is
+-- helpful when a small builder is sandwhiched between two large
+-- zero-copy builders:
+--
+-- > insert bigA <> flush 1 <> word8 0x42 <> insert bigB
+--
+-- Without @flush 1@, @word8 0x42@ would see the zero-byte active
+-- buffer that 'insert' returned, decide that it needed more space,
+-- and allocate a 4080-byte buffer to which only a single byte
+-- would be written.
+flush :: Int -> Builder
+flush !reqSz = Builder $ \buf0 off0 _ cs0 s0 ->
+  case Exts.newByteArray# sz# s0 of
+    (# sX, bufX #) ->
+      (# sX, bufX, 0#, sz#, Mutable buf0 off0 cs0 #)
+  where
+  !(I# sz# ) = max reqSz 0
 
 -- ShortText is already UTF-8 encoded. This is a no-op.
 shortTextToByteArray :: ShortText -> ByteArray

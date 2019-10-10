@@ -23,7 +23,6 @@ import qualified Data.List as L
 import qualified Data.Primitive as PM
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified Data.Vector as V
 import qualified GHC.Exts as Exts
 import qualified Test.Tasty.HUnit as THU
 import qualified Test.Tasty.QuickCheck as TQC
@@ -63,7 +62,7 @@ tests = testGroup "Tests"
         runConcat 1 (consLength32BE (word8Dec w))
         ===
         pack ('\x00' : '\x00' : '\x00' : chr (L.length (show w)) : show w)
-    , TQC.testProperty "consLength64BE" $ \w ->
+    , TQC.testProperty "consLength64BE-uni" $ \w ->
         pack
           ( '\x00' : '\x00' : '\x00' : '\x00'
           : '\x00' : '\x00' : '\x00' : chr (L.length (show w))
@@ -71,6 +70,14 @@ tests = testGroup "Tests"
           )
         ===
         runConcat 1 (consLength64BE (word16Dec w))
+    , TQC.testProperty "consLength64BE-multi" $ \w ->
+        pack
+          ( '\x00' : '\x00' : '\x00' : '\x00'
+          : '\x00' : '\x00' : '\x00' : chr (1 + L.length (show w))
+          : '\x42' : show w
+          )
+        ===
+        runConcat 1 (consLength64BE (word8 0x42 <> flush 2 <> word16Dec w))
     , THU.testCase "stringUtf8" $
         packUtf8 "¿Cómo estás? I am doing well." @=?
           runConcat 1 (stringUtf8 "¿Cómo estás? I am doing well.")
