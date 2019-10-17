@@ -3,14 +3,18 @@
 {-# language TypeApplications #-}
 {-# language OverloadedStrings #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
+import Control.Applicative (liftA2)
 import Control.Monad.ST (runST)
 import Data.ByteArray.Builder
 import Data.Primitive (PrimArray)
 import Data.Word
 import Data.Char (ord,chr)
 import Data.Primitive (ByteArray)
+import Data.WideWord (Word128(Word128))
 import Test.Tasty (defaultMain,testGroup,TestTree)
-import Test.QuickCheck ((===))
+import Test.QuickCheck ((===),Arbitrary)
 import Text.Printf (printf)
 import Test.Tasty.HUnit ((@=?))
 
@@ -164,6 +168,16 @@ tests = testGroup "Tests"
          in runConcat 1 (foldMap word64BE xs)
             ===
             runConcat 1 (word64ArrayBE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word128ArrayLE" $ \(xs :: [Word128]) ->
+        let ys = Exts.fromList xs :: PrimArray Word128
+         in runConcat 1 (foldMap word128LE xs)
+            ===
+            runConcat 1 (word128ArrayLE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word128ArrayBE" $ \(xs :: [Word128]) ->
+        let ys = Exts.fromList xs :: PrimArray Word128
+         in runConcat 1 (foldMap word128BE xs)
+            ===
+            runConcat 1 (word128ArrayBE ys 0 (Prelude.length xs))
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->
@@ -193,3 +207,6 @@ showWord64PaddedUpperHex = printf "%016X"
 
 runConcat :: Int -> Builder -> ByteArray
 runConcat n = Chunks.concat . run n
+
+instance Arbitrary Word128 where
+  arbitrary = liftA2 Word128 TQC.arbitrary TQC.arbitrary

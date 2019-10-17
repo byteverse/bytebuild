@@ -54,6 +54,7 @@ module Data.ByteArray.Builder
     -- *** One
   , word8
     -- **** Big Endian
+  , word128BE
   , word64BE
   , word32BE
   , word16BE
@@ -61,6 +62,7 @@ module Data.ByteArray.Builder
   , int32BE
   , int16BE
     -- **** Little Endian
+  , word128LE
   , word64LE
   , word32LE
   , word16LE
@@ -73,6 +75,7 @@ module Data.ByteArray.Builder
   , word16ArrayBE
   , word32ArrayBE
   , word64ArrayBE
+  , word128ArrayBE
   , int64ArrayBE
   , int32ArrayBE
   , int16ArrayBE
@@ -80,6 +83,7 @@ module Data.ByteArray.Builder
   , word16ArrayLE
   , word32ArrayLE
   , word64ArrayLE
+  , word128ArrayLE
   , int64ArrayLE
   , int32ArrayLE
   , int16ArrayLE
@@ -99,17 +103,18 @@ import Data.ByteArray.Builder.Unsafe (Builder(Builder))
 import Data.ByteArray.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
+import Data.Bytes.Chunks (Chunks(..))
 import Data.Bytes.Types (Bytes(Bytes))
 import Data.Char (ord)
 import Data.Int (Int64,Int32,Int16,Int8)
 import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
 import Data.Text.Short (ShortText)
+import Data.WideWord (Word128)
 import Data.Word (Word64,Word32,Word16,Word8)
+import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (MutableByteArray#,(+#),(-#),(<#))
 import GHC.ST (ST(ST))
-import Data.Bytes.Chunks (Chunks(..))
-import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
@@ -262,6 +267,16 @@ int16ArrayLE (PrimArray x) = word16ArrayLE (PrimArray x)
 int16ArrayBE :: PrimArray Int16 -> Int -> Int -> Builder
 int16ArrayBE (PrimArray x) = word16ArrayBE (PrimArray x)
 
+word128ArrayLE :: PrimArray Word128 -> Int -> Int -> Builder
+word128ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  LittleEndian -> bytes (Bytes (ByteArray arr) (soff0 * 16) (slen0 * 16))
+  BigEndian -> word128ArraySwap src soff0 slen0
+
+word128ArrayBE :: PrimArray Word128 -> Int -> Int -> Builder
+word128ArrayBE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  BigEndian -> bytes (Bytes (ByteArray arr) (soff0 * 16) (slen0 * 16))
+  LittleEndian -> word128ArraySwap src soff0 slen0
+
 word64ArrayLE :: PrimArray Word64 -> Int -> Int -> Builder
 word64ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
   LittleEndian -> bytes (Bytes (ByteArray arr) (soff0 * 8) (slen0 * 8))
@@ -348,6 +363,53 @@ word64ArraySwap src soff0 slen0 =
       PM.writeByteArray dst (doff + 6) v1
       PM.writeByteArray dst (doff + 7) v0
       go (soff + 8) send dst (doff + 8)
+    else pure doff
+
+word128ArraySwap :: PrimArray Word128 -> Int -> Int -> Builder
+word128ArraySwap src soff0 slen0 =
+  fromFunction (slen0 * 16) (go (soff0 * 16) ((soff0 + slen0) * 16))
+  where
+  -- TODO: Perhaps we could put byteswapping functions to use
+  -- rather than indexing tons of Word8s. This could be done
+  -- both here and in the other swap functions. There are a
+  -- decent number of tests for these array-swapping functions,
+  -- which makes changing this less scary.
+  go :: Int -> Int -> MutableByteArray s -> Int -> ST s Int
+  go !soff !send !dst !doff = if soff < send
+    then do
+      let v0 = PM.indexPrimArray (asWord8s src) soff
+          v1 = PM.indexPrimArray (asWord8s src) (soff + 1)
+          v2 = PM.indexPrimArray (asWord8s src) (soff + 2)
+          v3 = PM.indexPrimArray (asWord8s src) (soff + 3)
+          v4 = PM.indexPrimArray (asWord8s src) (soff + 4)
+          v5 = PM.indexPrimArray (asWord8s src) (soff + 5)
+          v6 = PM.indexPrimArray (asWord8s src) (soff + 6)
+          v7 = PM.indexPrimArray (asWord8s src) (soff + 7)
+          v8 = PM.indexPrimArray (asWord8s src) (soff + 8)
+          v9 = PM.indexPrimArray (asWord8s src) (soff + 9)
+          v10 = PM.indexPrimArray (asWord8s src) (soff + 10)
+          v11 = PM.indexPrimArray (asWord8s src) (soff + 11)
+          v12 = PM.indexPrimArray (asWord8s src) (soff + 12)
+          v13 = PM.indexPrimArray (asWord8s src) (soff + 13)
+          v14 = PM.indexPrimArray (asWord8s src) (soff + 14)
+          v15 = PM.indexPrimArray (asWord8s src) (soff + 15)
+      PM.writeByteArray dst doff v15
+      PM.writeByteArray dst (doff + 1) v14
+      PM.writeByteArray dst (doff + 2) v13
+      PM.writeByteArray dst (doff + 3) v12
+      PM.writeByteArray dst (doff + 4) v11
+      PM.writeByteArray dst (doff + 5) v10
+      PM.writeByteArray dst (doff + 6) v9
+      PM.writeByteArray dst (doff + 7) v8
+      PM.writeByteArray dst (doff + 8) v7
+      PM.writeByteArray dst (doff + 9) v6
+      PM.writeByteArray dst (doff + 10) v5
+      PM.writeByteArray dst (doff + 11) v4
+      PM.writeByteArray dst (doff + 12) v3
+      PM.writeByteArray dst (doff + 13) v2
+      PM.writeByteArray dst (doff + 14) v1
+      PM.writeByteArray dst (doff + 15) v0
+      go (soff + 16) send dst (doff + 16)
     else pure doff
 
 asWord8s :: PrimArray a -> PrimArray Word8
@@ -595,6 +657,11 @@ int32BE w = fromBounded Nat.constant (Bounded.int32BE w)
 int16BE :: Int16 -> Builder
 int16BE w = fromBounded Nat.constant (Bounded.int16BE w)
 
+-- | Requires exactly 16 bytes. Dump the octets of a 128-bit
+-- word in a little-endian fashion.
+word128LE :: Word128 -> Builder
+word128LE w = fromBounded Nat.constant (Bounded.word128LE w)
+
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a little-endian fashion.
 word64LE :: Word64 -> Builder
@@ -614,6 +681,11 @@ word16LE w = fromBounded Nat.constant (Bounded.word16LE w)
 -- word in a big-endian fashion.
 word64BE :: Word64 -> Builder
 word64BE w = fromBounded Nat.constant (Bounded.word64BE w)
+
+-- | Requires exactly 16 bytes. Dump the octets of a 128-bit
+-- word in a big-endian fashion.
+word128BE :: Word128 -> Builder
+word128BE w = fromBounded Nat.constant (Bounded.word128BE w)
 
 -- | Requires exactly 4 bytes. Dump the octets of a 32-bit
 -- word in a big-endian fashion.

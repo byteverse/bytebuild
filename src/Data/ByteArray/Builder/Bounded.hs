@@ -55,6 +55,7 @@ module Data.ByteArray.Builder.Bounded
     -- *** One
   , word8
     -- **** Big Endian
+  , word128BE
   , word64BE
   , word32BE
   , word16BE
@@ -62,6 +63,7 @@ module Data.ByteArray.Builder.Bounded
   , int32BE
   , int16BE
     -- **** Little Endian
+  , word128LE
   , word64LE
   , word32LE
   , word16LE
@@ -81,6 +83,7 @@ import Data.ByteArray.Builder.Bounded.Unsafe (Builder(..))
 import Data.Char (ord)
 import Data.Primitive
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
+import Data.WideWord (Word128(Word128))
 import GHC.Exts
 import GHC.Int (Int64(I64#),Int32(I32#),Int16(I16#),Int8(I8#))
 import GHC.ST (ST(ST))
@@ -608,6 +611,12 @@ int32LE (I32# i) = word32LE (W32# (int2Word# i))
 
 int16LE :: Int16 -> Builder 2
 int16LE (I16# i) = word16LE (W16# (int2Word# i))
+
+word128LE :: Word128 -> Builder 16
+word128LE (Word128 hi lo) = append (word64LE lo) (word64LE hi)
+
+word128BE :: Word128 -> Builder 16
+word128BE (Word128 hi lo) = append (word64BE hi) (word64BE lo)
 
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a little-endian fashion.
