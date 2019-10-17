@@ -1,15 +1,22 @@
 # Revision history for small-bytearray-builder
 
-## 0.3.0.0 -- 2019-??-??
+## 0.3.0.0 -- 2019-10-17
 
-* Introduce `consLensBE32` for efficient serialization of wire protocols
-  that require prefixing a payload with its length.
+* Breaking change: Change the internal implementation of `Builder`. This
+  now works a lot more like the builder from `bytestring`. It accumulates
+  chunks and can do a zero-copy appends when working with a sufficiently
+  large immutable chunk. This introduces a mild performance regression
+  (around 10%), but it makes the libary more generally useful.
+* Introduce `consLengthBE32` and `consLength64BE` for efficient serialization
+  of wire protocols that require prefixing a payload with its length.
 * Add `int{16,32,64}BE` and `int{16,32,64LE}` as conveniences.
 * Add little-endian encoding functions for `Word16`, `Word32`, and `Word64`.
 * Add big-endian and little-endian functions for copying a
   `PrimArray` of numbers (both signed and unsigned) into a builder.
 * Add `flush`, `copy`, and `insert` for better control when
   converting byte sequences to builders.
+* Add `shortByteString` to improve interoperability with the
+  `bytestring` library. 
 
 ## 0.2.1.0 -- 2019-09-05
 

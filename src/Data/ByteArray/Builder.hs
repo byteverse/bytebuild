@@ -18,6 +18,7 @@ module Data.ByteArray.Builder
   , copy
   , insert
   , byteArray
+  , shortByteString
   , shortTextUtf8
   , shortTextJsonString
   , cstring
@@ -183,6 +184,11 @@ fromBoundedOne (UnsafeBounded.Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
 -- | Create a builder from an unsliced byte sequence.
 byteArray :: ByteArray -> Builder
 byteArray a = bytes (Bytes a 0 (PM.sizeofByteArray a))
+
+-- | Create a builder from a short bytestring.
+shortByteString :: ShortByteString -> Builder
+shortByteString (SBS x) = bytes (Bytes a 0 (PM.sizeofByteArray a))
+  where a = ByteArray x
 
 -- | Create a builder from a sliced byte sequence. The variants
 -- 'copy' and 'insert' provide more control over whether or not
