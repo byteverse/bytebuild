@@ -5,6 +5,7 @@
 * Add big-endian and little-endian parsers for `Word128`. This includes
   both the single and multiple element variants.
 * Export `reverseCommitsOntoChunks` from the `Unsafe` module.
+* Add `Semigroup` and `Monoid` instances for `Chunks`.
 
 ## 0.3.0.0 -- 2019-10-17
 

@@ -8,15 +8,17 @@
 module Data.Bytes.Chunks
   ( Chunks(..)
   , concat
+  , reverse
+  , reverseOnto
   ) where
 
-import Prelude hiding (length,concat)
+import Prelude hiding (length,concat,reverse)
 
 import GHC.ST (ST(..))
 import Data.Bytes.Types (Bytes(..))
 import Data.Primitive (ByteArray(..),MutableByteArray(..))
 import GHC.Exts (ByteArray#,MutableByteArray#)
-import GHC.Exts (IsList,Int#,State#,Int(I#),(+#),(-#))
+import GHC.Exts (Int#,State#,Int(I#),(+#))
 import Control.Monad.ST.Run (runByteArrayST)
 
 import qualified GHC.Exts as Exts
@@ -25,6 +27,15 @@ import qualified Data.Primitive as PM
 data Chunks
   = ChunksCons {-# UNPACK #-} !Bytes !Chunks
   | ChunksNil
+
+instance Semigroup Chunks where
+  ChunksNil <> a = a
+  cs@(ChunksCons _ _) <> ChunksNil = cs
+  as@(ChunksCons _ _) <> bs@(ChunksCons _ _) =
+    reverseOnto bs (reverse as)
+
+instance Monoid Chunks where
+  mempty = ChunksNil
 
 concat :: Chunks -> ByteArray
 concat x = ByteArray (concat# x)
@@ -68,6 +79,19 @@ copy# _ off ChunksNil s0 = (# s0, off #)
 copy# marr off (ChunksCons (Bytes{array,offset,length}) cs) s0 =
   case Exts.copyByteArray# (unBa array) (unI offset) marr off (unI length) s0 of
     s1 -> copy# marr (off +# unI length) cs s1
+
+
+-- | Reverse chunks but not the bytes within each chunk.
+reverse :: Chunks -> Chunks
+reverse = reverseOnto ChunksNil
+
+-- | Variant of 'reverse' that allows the caller to provide
+-- an initial list of chunks that the reversed chunks will
+-- be pushed onto.
+reverseOnto :: Chunks -> Chunks -> Chunks
+reverseOnto !x ChunksNil = x
+reverseOnto !x (ChunksCons y ys) =
+  reverseOnto (ChunksCons y x) ys
 
 unI :: Int -> Int#
 unI (I# i) = i
