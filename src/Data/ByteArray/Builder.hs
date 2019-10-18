@@ -97,13 +97,13 @@ module Data.ByteArray.Builder
   , flush
   ) where
 
-import Control.Monad.Primitive (primitive_)
 import Control.Monad.ST (ST,runST)
 import Data.ByteArray.Builder.Unsafe (Builder(Builder))
 import Data.ByteArray.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
+import Data.ByteArray.Builder.Unsafe (reverseCommitsOntoChunks)
 import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
-import Data.Bytes.Chunks (Chunks(..))
+import Data.Bytes.Chunks (Chunks(ChunksNil))
 import Data.Bytes.Types (Bytes(Bytes))
 import Data.Char (ord)
 import Data.Int (Int64,Int32,Int16,Int8)
@@ -134,21 +134,7 @@ run hint@(I# hint# ) (Builder f) = runST $ do
   cs <- ST $ \s0 -> case f buf0 0# hint# Initial s0 of
     (# s1, bufX, offX, _, csX #) ->
       (# s1, Mutable bufX offX csX #)
-  commitsOntoChunks ChunksNil cs
-
--- Internal. This freezes all the mutable byte arrays in-place,
--- so be careful. It also reverses the chunks since everything
--- is backwards.
-commitsOntoChunks :: Chunks -> Commits s -> ST s Chunks
-commitsOntoChunks !xs Initial = pure xs
-commitsOntoChunks !xs (Immutable arr off len cs) =
-  commitsOntoChunks (ChunksCons (Bytes (ByteArray arr) (I# off) (I# len)) xs) cs
-commitsOntoChunks !xs (Mutable buf len cs) = case len of
-  0# -> commitsOntoChunks xs cs
-  _ -> do
-    shrinkMutableByteArray (MutableByteArray buf) (I# len)
-    arr <- PM.unsafeFreezeByteArray (MutableByteArray buf)
-    commitsOntoChunks (ChunksCons (Bytes arr 0 (I# len)) xs) cs
+  reverseCommitsOntoChunks ChunksNil cs
 
 -- | Convert a bounded builder to an unbounded one. If the size
 -- is a constant, use @Arithmetic.Nat.constant@ as the first argument
@@ -622,10 +608,6 @@ char c = fromBounded Nat.constant (Bounded.char c)
 
 unST :: ST s a -> State# s -> (# State# s, a #)
 unST (ST f) = f
-
-shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
-shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
-  primitive_ (Exts.shrinkMutableByteArray# arr sz)
 
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- signed integer in a little-endian fashion.

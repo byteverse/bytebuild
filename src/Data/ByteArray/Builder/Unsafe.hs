@@ -10,6 +10,8 @@ module Data.ByteArray.Builder.Unsafe
   ( -- * Types
     Builder(..)
   , Commits(..)
+    -- * Finalization
+  , reverseCommitsOntoChunks
     -- * Safe Functions
     -- | These functions are actually completely safe, but they are defined
     -- here because they are used by typeclass instances. Import them from
@@ -18,17 +20,21 @@ module Data.ByteArray.Builder.Unsafe
   , cstring
   ) where
 
-import Data.Primitive (MutableByteArray(MutableByteArray),ByteArray)
+import Control.Monad.Primitive (primitive_)
+import Data.Bytes.Chunks (Chunks(ChunksCons))
+import Data.Bytes.Types (Bytes(Bytes))
+import Data.Primitive (MutableByteArray(..),ByteArray(..))
 import Foreign.C.String (CString)
+import GHC.Base (unpackCString#,unpackCStringUtf8#)
 import GHC.Exts ((-#),(+#),(>#))
 import GHC.Exts (Addr#,ByteArray#,MutableByteArray#,Int(I#),Ptr(Ptr))
-import GHC.Exts (IsString,Int#,State#,MutableByteArray#)
+import GHC.Exts (IsString,Int#,State#)
 import GHC.ST (ST(ST))
-import GHC.Base (unpackCString#,unpackCStringUtf8#)
 
 import qualified GHC.Exts as Exts
 import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
+import qualified Data.Primitive as PM
 
 -- | An unmaterialized sequence of bytes that may be pasted
 -- into a mutable byte array.
@@ -67,6 +73,24 @@ data Commits s
       Int# -- ^ Length (may be smaller than actual length)
       !(Commits s)
   | Initial
+
+-- | Cons the chunks from a list of @Commits@ onto an initial
+-- @Chunks@ list (this argument is often @ChunksNil@). This reverses
+-- the order of the chunks, which is desirable since builders assemble
+-- @Commits@ with the chunks backwards. This performs an in-place shrink
+-- and freezes on any mutable byte arrays it encounters. Consequently,
+-- these must not be reused.
+reverseCommitsOntoChunks :: Chunks -> Commits s -> ST s Chunks
+reverseCommitsOntoChunks !xs Initial = pure xs
+reverseCommitsOntoChunks !xs (Immutable arr off len cs) =
+  reverseCommitsOntoChunks (ChunksCons (Bytes (ByteArray arr) (I# off) (I# len)) xs) cs
+reverseCommitsOntoChunks !xs (Mutable buf len cs) = case len of
+  -- Skip over empty byte arrays.
+  0# -> reverseCommitsOntoChunks xs cs
+  _ -> do
+    shrinkMutableByteArray (MutableByteArray buf) (I# len)
+    arr <- PM.unsafeFreezeByteArray (MutableByteArray buf)
+    reverseCommitsOntoChunks (ChunksCons (Bytes arr 0 (I# len)) xs) cs
 
 -- | Create a builder from a cons-list of 'Char'. These
 -- are be UTF-8 encoded.
@@ -118,3 +142,8 @@ goCString addr buf0 off0 len0 cs0 s0 = case Exts.indexWord8OffAddr# addr 0# of
 
 unST :: ST s a -> State# s -> (# State# s, a #)
 unST (ST f) = f
+
+shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
+shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
+  primitive_ (Exts.shrinkMutableByteArray# arr sz)
+
