@@ -460,9 +460,9 @@ shortTextUtf8 a =
 -- and JSON special characters will be escaped. Additionally, the
 -- result is surrounded by double quotes. For example:
 --
--- * @foo ==> "foo"@
--- * @\_"_/ ==> "\\_\"_/"@
--- * @hello<ESC>world ==> "hello\u001Bworld"@ (where <LF> is code point 0x1B)
+-- * @foo ==\> "foo"@ (no escape sequences)
+-- * @\\_"_\/ ==\> "\\\\_\\"_\/"@ (escapes backslashes and quotes)
+-- * @hello\<ESC\>world ==> "hello\\u001Bworld"@ (where @\<ESC\>@ is code point 0x1B)
 shortTextJsonString :: ShortText -> Builder
 shortTextJsonString a =
   let !(ByteArray ba) = shortTextToByteArray a
