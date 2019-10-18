@@ -404,7 +404,7 @@ asWord8s (PrimArray x) = PrimArray x
 -- Internal function. Precondition, the referenced slice of the
 -- byte sequence is UTF-8 encoded text.
 slicedUtf8TextJson :: ByteArray# -> Int# -> Int# -> Builder
-{-# inline slicedUtf8TextJson #-}
+{-# noinline slicedUtf8TextJson #-}
 slicedUtf8TextJson !src# !soff0# !slen0# = fromFunction reqLen $ \dst doff0 -> do
   PM.writeByteArray dst doff0 (c2w '"')
   let go !soff !slen !doff = if slen > 0
