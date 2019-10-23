@@ -27,6 +27,7 @@ import qualified Data.Primitive as PM
 data Chunks
   = ChunksCons {-# UNPACK #-} !Bytes !Chunks
   | ChunksNil
+  deriving stock (Show)
 
 instance Semigroup Chunks where
   ChunksNil <> a = a
@@ -36,6 +37,11 @@ instance Semigroup Chunks where
 
 instance Monoid Chunks where
   mempty = ChunksNil
+
+instance Eq Chunks where
+  -- TODO: There is a more efficient way to do this, but
+  -- it is tedious.
+  a == b = concat a == concat b
 
 concat :: Chunks -> ByteArray
 concat x = ByteArray (concat# x)
