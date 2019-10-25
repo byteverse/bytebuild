@@ -88,6 +88,7 @@ module Data.ByteArray.Builder
   , int32ArrayLE
   , int16ArrayLE
     -- ** Prefixing with Length
+  , consLength32LE
   , consLength32BE
   , consLength64BE
     -- * Encode Floating-Point Types
@@ -682,6 +683,27 @@ word16BE w = fromBounded Nat.constant (Bounded.word16BE w)
 -- | Requires exactly 1 byte.
 word8 :: Word8 -> Builder
 word8 w = fromBoundedOne (Bounded.word8 w)
+
+-- | Variant of 'consLength32BE' the encodes the length in
+-- a little-endian fashion.
+consLength32LE :: Builder -> Builder
+consLength32LE (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# 4# of
+        1# -> (# s0, buf0, off0, len0, cs0 #)
+        _ -> case Exts.newByteArray# 4080# s0 of
+          (# sX, bufX #) ->
+            (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
+   in case f buf1 (off1 +# 4# ) (len1 -# 4# ) cs1 s1 of
+        (# s2, buf2, off2, len2, cs2 #) ->
+          let !dist = case Exts.sameMutableByteArray# buf1 buf2 of
+                1# -> off2 -# off1
+                _ -> commitDistance buf1 off2 cs2 -# off1
+              ST g = UnsafeBounded.pasteST
+                (Bounded.word32LE (fromIntegral (I# (dist -# 4# ))))
+                (MutableByteArray buf1)
+                (I# off1)
+           in case g s2 of
+                (# s3, _ #) -> (# s3, buf2, off2, len2, cs2 #)
 
 -- | Prefix a builder with its size in bytes. This size is
 -- presented as a big-endian 32-bit word. The need to prefix
