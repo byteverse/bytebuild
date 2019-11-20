@@ -7,6 +7,7 @@
 * Export `reverseCommitsOntoChunks` from the `Unsafe` module.
 * Add `Semigroup` and `Monoid` instances for `Chunks`.
 * Add `consLengthLE32`.
+* Add `fromEffect` to the unsafe interface.
 
 ## 0.3.0.0 -- 2019-10-17
 

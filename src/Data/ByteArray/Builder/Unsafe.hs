@@ -10,6 +10,8 @@ module Data.ByteArray.Builder.Unsafe
   ( -- * Types
     Builder(..)
   , Commits(..)
+    -- * Construction
+  , fromEffect
     -- * Finalization
   , reverseCommitsOntoChunks
     -- * Safe Functions
@@ -26,7 +28,7 @@ import Data.Bytes.Types (Bytes(Bytes))
 import Data.Primitive (MutableByteArray(..),ByteArray(..))
 import Foreign.C.String (CString)
 import GHC.Base (unpackCString#,unpackCStringUtf8#)
-import GHC.Exts ((-#),(+#),(>#))
+import GHC.Exts ((-#),(+#),(>#),(>=#))
 import GHC.Exts (Addr#,ByteArray#,MutableByteArray#,Int(I#),Ptr(Ptr))
 import GHC.Exts (IsString,Int#,State#)
 import GHC.ST (ST(ST))
@@ -119,6 +121,8 @@ goString (c : cs) buf0 off0 len0 cs0 s0 = case len0 ># 3# of
 -- We have to have a rule for both unpackCString# and unpackCStringUtf8#
 -- since GHC uses a different function based on whether or not non-ASCII
 -- codepoints are used in the string.
+-- TODO: The UTF-8 variant of this rule is unsound because GHC actually
+-- used Modified UTF-8.
 {-# RULES
 "Builder stringUtf8/cstring" forall s a b c d e.
   goString (unpackCString# s) a b c d e = goCString s a b c d e
@@ -140,10 +144,26 @@ goCString addr buf0 off0 len0 cs0 s0 = case Exts.indexWord8OffAddr# addr 0# of
     _ -> case Exts.writeWord8Array# buf0 off0 w s0 of
       s1 -> goCString (Exts.plusAddr# addr 1# ) buf0 (off0 +# 1# ) (len0 -# 1# ) cs0 s1
 
+fromEffect ::
+     Int -- ^ Maximum number of bytes the paste function needs
+  -> (forall s. MutableByteArray s -> Int -> ST s Int)
+     -- ^ Paste function. Takes a byte array and an offset and returns
+     -- the new offset and having pasted into the buffer.
+  -> Builder
+{-# inline fromEffect #-}
+fromEffect (I# req) f = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# req of
+        1# -> (# s0, buf0, off0, len0, cs0 #)
+        _ -> let !(I# lenX) = max 4080 (I# req) in
+          case Exts.newByteArray# lenX s0 of
+            (# sX, bufX #) ->
+              (# sX, bufX, 0#, lenX, Mutable buf0 off0 cs0 #)
+   in case unST (f (MutableByteArray buf1) (I# off1)) s1 of
+        (# s2, I# off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
+
 unST :: ST s a -> State# s -> (# State# s, a #)
 unST (ST f) = f
 
 shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
 shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
   primitive_ (Exts.shrinkMutableByteArray# arr sz)
-
