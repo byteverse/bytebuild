@@ -33,10 +33,10 @@ import GHC.Exts (Addr#,ByteArray#,MutableByteArray#,Int(I#),Ptr(Ptr))
 import GHC.Exts (IsString,Int#,State#)
 import GHC.ST (ST(ST))
 
-import qualified GHC.Exts as Exts
 import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
+import qualified GHC.Exts as Exts
 
 -- | An unmaterialized sequence of bytes that may be pasted
 -- into a mutable byte array.

@@ -119,11 +119,11 @@ import GHC.ST (ST(ST))
 
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
-import qualified GHC.Exts as Exts
-import qualified Data.Text.Short as TS
-import qualified Data.Primitive as PM
 import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
+import qualified Data.Primitive as PM
+import qualified Data.Text.Short as TS
+import qualified GHC.Exts as Exts
 
 -- | Run a builder.
 run ::

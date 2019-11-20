@@ -90,9 +90,9 @@ import GHC.ST (ST(ST))
 import GHC.TypeLits (type (+))
 import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
 
-import qualified Arithmetic.Types as Arithmetic
-import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Lte as Lte
+import qualified Arithmetic.Nat as Nat
+import qualified Arithmetic.Types as Arithmetic
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as Unsafe
 import qualified Data.Primitive as PM
 

@@ -16,12 +16,12 @@ module Data.ByteArray.Builder.Bounded.Unsafe
   , pasteIO
   ) where
 
-import GHC.TypeLits (Nat)
 import Data.Kind (Type)
+import Data.Primitive (MutableByteArray(..))
+import GHC.Exts (Int(I#),RealWorld,Int#,State#,MutableByteArray#)
 import GHC.IO (stToIO)
 import GHC.ST (ST(ST))
-import GHC.Exts (Int(I#),RealWorld,Int#,State#,MutableByteArray#)
-import Data.Primitive (MutableByteArray(..))
+import GHC.TypeLits (Nat)
 
 -- | A builder parameterized by the maximum number of bytes it uses
 -- when executed.

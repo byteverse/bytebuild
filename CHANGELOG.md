@@ -1,6 +1,6 @@
 # Revision history for small-bytearray-builder
 
-## 0.3.1.0 -- 2019-??-??
+## 0.3.1.0 -- 2019-11-20
 
 * Add big-endian and little-endian parsers for `Word128`. This includes
   both the single and multiple element variants.
