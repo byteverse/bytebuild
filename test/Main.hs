@@ -13,6 +13,7 @@ import Data.Bytes.Chunks (Chunks(ChunksNil,ChunksCons))
 import Data.Primitive (PrimArray)
 import Data.Word
 import Data.Char (ord,chr)
+import Data.IORef (IORef,newIORef,readIORef,writeIORef)
 import Data.Primitive (ByteArray)
 import Data.Proxy (Proxy(..))
 import Data.WideWord (Word128(Word128))
@@ -28,6 +29,7 @@ import qualified Data.ByteString.Lazy.Char8 as LB
 import qualified Data.Bytes.Chunks as Chunks
 import qualified Data.List as L
 import qualified Data.Primitive as PM
+import qualified Data.Primitive.Unlifted.Array as PM
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified GHC.Exts as Exts
@@ -197,7 +199,39 @@ tests = testGroup "Tests"
     , lawsToTest (QCC.semigroupLaws (Proxy :: Proxy Chunks))
     , lawsToTest (QCC.monoidLaws (Proxy :: Proxy Chunks))
     ]
+  , testGroup "putMany"
+    [ THU.testCase "A" $ do
+        ref <- newIORef []
+        let txt = "hello_world_are_you_listening" :: [Char]
+        putMany 7 ascii txt (ontoRef ref)
+        res <- readIORef ref
+        id $
+          [ map c2w "hello_w"
+          , map c2w "o"
+          , map c2w "rld_are"
+          , map c2w "_"
+          , map c2w "you_lis"
+          , map c2w "t"
+          , map c2w "ening"
+          ] @=? map Exts.toList (Exts.toList res)
+    ]
   ]
+
+ontoRef ::
+     IORef [PM.ByteArray]
+  -> PM.UnliftedArray (PM.MutableByteArray Exts.RealWorld)
+  -> IO ()
+ontoRef !ref xs = do
+  rs <- readIORef ref
+  ps <- PM.foldlUnliftedArrayM'
+    (\ys buf -> do
+      len <- PM.getSizeofMutableByteArray buf
+      dst <- PM.newByteArray len
+      PM.copyMutableByteArray dst 0 buf 0 len
+      dst' <- PM.unsafeFreezeByteArray dst
+      pure (ys ++ [dst'])
+    ) [] xs
+  writeIORef ref (rs ++ ps)
 
 instance Arbitrary Chunks where
   arbitrary = do
@@ -231,6 +265,9 @@ showWord64PaddedUpperHex = printf "%016X"
 
 runConcat :: Int -> Builder -> ByteArray
 runConcat n = Chunks.concat . run n
+
+c2w :: Char -> Word8
+c2w = fromIntegral . ord
 
 instance Arbitrary Word128 where
   arbitrary = liftA2 Word128 TQC.arbitrary TQC.arbitrary

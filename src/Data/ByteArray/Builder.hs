@@ -13,6 +13,7 @@ module Data.ByteArray.Builder
   , fromBounded
     -- * Evaluation
   , run
+  , putMany
     -- * Materialized Byte Sequences
   , bytes
   , copy
@@ -88,6 +89,7 @@ module Data.ByteArray.Builder
   , int32ArrayLE
   , int16ArrayLE
     -- ** Prefixing with Length
+  , consLength
   , consLength32LE
   , consLength32BE
   , consLength64BE
@@ -100,6 +102,7 @@ module Data.ByteArray.Builder
 
 import Control.Monad.ST (ST,runST)
 import Data.ByteArray.Builder.Unsafe (Builder(Builder))
+import Data.ByteArray.Builder.Unsafe (BuilderState(BuilderState),pasteIO)
 import Data.ByteArray.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.ByteArray.Builder.Unsafe (reverseCommitsOntoChunks)
 import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
@@ -107,14 +110,17 @@ import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Bytes.Chunks (Chunks(ChunksNil))
 import Data.Bytes.Types (Bytes(Bytes))
 import Data.Char (ord)
+import Data.Foldable (foldlM)
 import Data.Int (Int64,Int32,Int16,Int8)
 import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
+import Data.Primitive.Unlifted.Array (MutableUnliftedArray,UnliftedArray)
 import Data.Text.Short (ShortText)
 import Data.WideWord (Word128)
 import Data.Word (Word64,Word32,Word16,Word8)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
-import GHC.Exts (MutableByteArray#,(+#),(-#),(<#))
+import GHC.Exts (RealWorld,MutableByteArray#,(+#),(-#),(<#))
+import GHC.IO (IO(IO))
 import GHC.ST (ST(ST))
 
 import qualified Arithmetic.Nat as Nat
@@ -122,6 +128,7 @@ import qualified Arithmetic.Types as Arithmetic
 import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
+import qualified Data.Primitive.Unlifted.Array as PM
 import qualified Data.Text.Short as TS
 import qualified GHC.Exts as Exts
 
@@ -136,6 +143,73 @@ run hint@(I# hint# ) (Builder f) = runST $ do
     (# s1, bufX, offX, _, csX #) ->
       (# s1, Mutable bufX offX csX #)
   reverseCommitsOntoChunks ChunksNil cs
+
+-- | Run a builder against lots of elements. This fills the same
+-- underlying buffer over and over again. Do not let the argument to
+-- the callback escape from the callback (i.e. do not write it to an
+-- @IORef@). Also, do not @unsafeFreezeByteArray@ any of the mutable
+-- byte arrays in the callback. The intent is that the callback will
+-- write the buffers out, preferably using vectored I/O.
+putMany :: Foldable f
+  => Int -- ^ Size of shared chunk (use 8176 if uncertain)
+  -> (a -> Builder) -- ^ Value builder
+  -> f a -- ^ Collection of values
+  -> (UnliftedArray (MutableByteArray RealWorld) -> IO b) -- ^ Consume chunks.
+  -> IO ()
+{-# inline putMany #-}
+putMany hint@(I# hint#) g xs cb = do
+  MutableByteArray buf0 <- PM.newByteArray hint
+  BuilderState bufZ offZ _ cmtsZ <- foldlM
+    (\st0 a -> do
+      st1@(BuilderState buf off _ cmts) <- pasteIO (g a) st0
+      case cmts of
+        Initial -> pure st1
+        _ -> do
+          _ <- cb =<< commitsToArray buf off cmts
+          pure (BuilderState buf0 0# hint# Initial)
+    ) (BuilderState buf0 0# hint# Initial) xs
+  _ <- cb =<< commitsToArray bufZ offZ cmtsZ
+  pure ()
+
+commitsToArray ::
+     MutableByteArray# RealWorld -- final chunk to append to commits
+  -> Int# -- offset
+  -> Commits RealWorld
+  -> IO (UnliftedArray (MutableByteArray RealWorld))
+commitsToArray buf off cmts = do
+  let ct = countCommits 1 cmts
+  bufs <- PM.unsafeNewUnliftedArray ct
+  -- Only shrink the last chunk. Crucially, this is never the first
+  -- chunk (except on the commitsToArray call at the end of folding
+  -- over the collection). We only perform this shrink in the hopes
+  -- that a future GHC will allow reclaiming bytes from shrunk arrays.
+  shrinkMutableByteArray (MutableByteArray buf) (I# off)
+  PM.writeUnliftedArray bufs (ct - 1) (MutableByteArray buf)
+  writeCommitsToArray (ct - 2) bufs cmts
+  PM.unsafeFreezeUnliftedArray bufs
+
+-- See the documentation for putMany.
+writeCommitsToArray ::
+     Int
+  -> MutableUnliftedArray RealWorld (MutableByteArray RealWorld)
+  -> Commits RealWorld
+  -> IO ()
+writeCommitsToArray !ix !arrs x0 = case x0 of
+  Initial -> pure ()
+  Mutable buf _ x1 -> do
+    PM.writeUnliftedArray arrs ix (MutableByteArray buf)
+    writeCommitsToArray (ix - 1) arrs x1
+  Immutable arr off len x1 -> do
+    buf <- PM.newByteArray (I# len)
+    PM.copyByteArray buf 0 (ByteArray arr) (I# off) (I# len)
+    PM.writeUnliftedArray arrs ix buf
+    writeCommitsToArray (ix - 1) arrs x1
+
+countCommits :: Int -> Commits s -> Int
+countCommits !n x0 = case x0 of
+  Initial -> n
+  Mutable _ _ x1 -> countCommits (n + 1) x1
+  Immutable _ _ _ x1 -> countCommits (n + 1) x1
 
 -- | Convert a bounded builder to an unbounded one. If the size
 -- is a constant, use @Arithmetic.Nat.constant@ as the first argument
@@ -603,7 +677,7 @@ word8PaddedUpperHex w =
 ascii :: Char -> Builder
 ascii c = fromBoundedOne (Bounded.ascii c)
 
--- | Encode an UTF8 char. This only uses as much space as is required.
+-- | Encode a UTF-8 char. This only uses as much space as is required.
 char :: Char -> Builder
 char c = fromBounded Nat.constant (Bounded.char c)
 
@@ -684,33 +758,43 @@ word16BE w = fromBounded Nat.constant (Bounded.word16BE w)
 word8 :: Word8 -> Builder
 word8 w = fromBoundedOne (Bounded.word8 w)
 
--- | Variant of 'consLength32BE' the encodes the length in
--- a little-endian fashion.
-consLength32LE :: Builder -> Builder
-consLength32LE (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
-  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# 4# of
+-- | Prefix a builder with the number of bytes that it requires.
+consLength ::
+     Arithmetic.Nat n -- ^ Number of bytes used by the serialization of the length
+  -> (Int -> Bounded.Builder n) -- ^ Length serialization function
+  -> Builder -- ^ Builder whose length is measured
+  -> Builder
+{-# inline consLength #-}
+consLength !n buildSize (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(I# lenSz) = Nat.demote n
+      !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# lenSz of
         1# -> (# s0, buf0, off0, len0, cs0 #)
         _ -> case Exts.newByteArray# 4080# s0 of
           (# sX, bufX #) ->
             (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
-   in case f buf1 (off1 +# 4# ) (len1 -# 4# ) cs1 s1 of
+   in case f buf1 (off1 +# lenSz) (len1 -# lenSz) cs1 s1 of
         (# s2, buf2, off2, len2, cs2 #) ->
           let !dist = case Exts.sameMutableByteArray# buf1 buf2 of
                 1# -> off2 -# off1
                 _ -> commitDistance buf1 off2 cs2 -# off1
               ST g = UnsafeBounded.pasteST
-                (Bounded.word32LE (fromIntegral (I# (dist -# 4# ))))
+                (buildSize (fromIntegral (I# (dist -# lenSz))))
                 (MutableByteArray buf1)
                 (I# off1)
            in case g s2 of
                 (# s3, _ #) -> (# s3, buf2, off2, len2, cs2 #)
+
+-- | Variant of 'consLength32BE' the encodes the length in
+-- a little-endian fashion.
+consLength32LE :: Builder -> Builder
+consLength32LE = consLength Nat.constant (\x -> Bounded.word32LE (fromIntegral x))
 
 -- | Prefix a builder with its size in bytes. This size is
 -- presented as a big-endian 32-bit word. The need to prefix
 -- a builder with its length shows up a numbers of wire protocols
 -- including those of PostgreSQL and Apache Kafka. Note the
 -- equivalence:
--- 
+--
 -- > forall (n :: Int) (x :: Builder).
 -- >   let sz = sizeofByteArray (run n (consLength32BE x))
 -- >   consLength32BE x === word32BE (fromIntegral sz) <> x
@@ -718,45 +802,12 @@ consLength32LE (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
 -- However, using 'consLength32BE' is much more efficient here
 -- since it only materializes the 'ByteArray' once.
 consLength32BE :: Builder -> Builder
-consLength32BE (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
-  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# 4# of
-        1# -> (# s0, buf0, off0, len0, cs0 #)
-        _ -> case Exts.newByteArray# 4080# s0 of
-          (# sX, bufX #) ->
-            (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
-   in case f buf1 (off1 +# 4# ) (len1 -# 4# ) cs1 s1 of
-        (# s2, buf2, off2, len2, cs2 #) ->
-          let !dist = case Exts.sameMutableByteArray# buf1 buf2 of
-                1# -> off2 -# off1
-                _ -> commitDistance buf1 off2 cs2 -# off1
-              ST g = UnsafeBounded.pasteST
-                (Bounded.word32BE (fromIntegral (I# (dist -# 4# ))))
-                (MutableByteArray buf1)
-                (I# off1)
-           in case g s2 of
-                (# s3, _ #) -> (# s3, buf2, off2, len2, cs2 #)
-
+consLength32BE = consLength Nat.constant (\x -> Bounded.word32BE (fromIntegral x))
 
 -- | Prefix a builder with its size in bytes. This size is
 -- presented as a big-endian 64-bit word. See 'consLength32BE'.
 consLength64BE :: Builder -> Builder
-consLength64BE (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
-  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# 8# of
-        1# -> (# s0, buf0, off0, len0, cs0 #)
-        _ -> case Exts.newByteArray# 4080# s0 of
-          (# sX, bufX #) ->
-            (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
-   in case f buf1 (off1 +# 8# ) (len1 -# 8# ) cs1 s1 of
-        (# s2, buf2, off2, len2, cs2 #) ->
-          let !dist = case Exts.sameMutableByteArray# buf1 buf2 of
-                1# -> off2 -# off1
-                _ -> commitDistance buf1 off2 cs2 -# off1
-              ST g = UnsafeBounded.pasteST
-                (Bounded.word64BE (fromIntegral (I# (dist -# 8# ))))
-                (MutableByteArray buf1)
-                (I# off1)
-           in case g s2 of
-                (# s3, _ #) -> (# s3, buf2, off2, len2, cs2 #)
+consLength64BE = consLength Nat.constant (\x -> Bounded.word64BE (fromIntegral x))
 
 commitDistance :: MutableByteArray# s -> Int# -> Commits s -> Int#
 commitDistance _ !_ Initial = error "chunkDistance: chunk not found"
@@ -796,3 +847,7 @@ indexChar8Array (ByteArray b) (I# i) = C# (Exts.indexCharArray# b i)
 
 c2w :: Char -> Word8
 c2w = fromIntegral . ord
+
+shrinkMutableByteArray :: MutableByteArray RealWorld -> Int -> IO ()
+shrinkMutableByteArray (MutableByteArray x) (I# i) =
+  IO (\s -> (# Exts.shrinkMutableByteArray# x i s, ()#))

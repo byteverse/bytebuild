@@ -1,5 +1,11 @@
 # Revision history for small-bytearray-builder
 
+## 0.3.2.0 -- 2019-??-??
+
+* Add `putMany`, which allows pasting into the same mutable byte
+  array over and over.
+* Add `consLength`.
+
 ## 0.3.1.0 -- 2019-11-20
 
 * Add big-endian and little-endian parsers for `Word128`. This includes

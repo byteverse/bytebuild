@@ -9,7 +9,11 @@
 module Data.ByteArray.Builder.Unsafe
   ( -- * Types
     Builder(..)
+  , BuilderState(..)
   , Commits(..)
+    -- * Execution
+  , pasteST
+  , pasteIO
     -- * Construction
   , fromEffect
     -- * Finalization
@@ -30,8 +34,9 @@ import Foreign.C.String (CString)
 import GHC.Base (unpackCString#,unpackCStringUtf8#)
 import GHC.Exts ((-#),(+#),(>#),(>=#))
 import GHC.Exts (Addr#,ByteArray#,MutableByteArray#,Int(I#),Ptr(Ptr))
-import GHC.Exts (IsString,Int#,State#)
+import GHC.Exts (RealWorld,IsString,Int#,State#)
 import GHC.ST (ST(ST))
+import GHC.IO (stToIO)
 
 import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
@@ -49,6 +54,27 @@ newtype Builder
       State# s ->
       (# State# s, MutableByteArray# s, Int#, Int#, Commits s #) -- all the same things
     )
+
+data BuilderState s = BuilderState
+  (MutableByteArray# s) -- buffer we are currently writing to
+  Int# -- offset into the current buffer
+  Int# -- number of bytes remaining in the current buffer
+  !(Commits s) -- buffers and immutable byte slices that are already committed
+
+-- | Run a builder, performing an in-place update on the state.
+-- The @BuilderState@ argument must not be reused after being passed
+-- to this function. That is, its use must be affine.
+pasteST :: Builder -> BuilderState s -> ST s (BuilderState s)
+{-# inline pasteST #-}
+pasteST (Builder f) (BuilderState buf off len cmts) = ST $ \s0 ->
+  case f buf off len cmts s0 of
+    (# s1, buf1, off1, len1, cmts1 #) ->
+      (# s1, BuilderState buf1 off1 len1 cmts1 #)
+
+-- | Variant of 'pasteST' that runs in 'IO'.
+pasteIO :: Builder -> BuilderState RealWorld -> IO (BuilderState RealWorld)
+{-# inline pasteIO #-}
+pasteIO b st = stToIO (pasteST b st)
 
 instance IsString Builder where
   {-# inline fromString #-}
