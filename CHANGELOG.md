@@ -5,6 +5,7 @@
 * Add `putMany`, which allows pasting into the same mutable byte
   array over and over.
 * Add `consLength`.
+* Add `putManyConsLength`, useful for chunked HTTP encoding.
 
 ## 0.3.1.0 -- 2019-11-20
 

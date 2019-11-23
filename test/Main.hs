@@ -23,6 +23,7 @@ import Text.Printf (printf)
 import Test.Tasty.HUnit ((@=?))
 
 import qualified Arithmetic.Nat as Nat
+import qualified Data.ByteArray.Builder.Bounded as Bounded
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy.Char8 as LB
@@ -213,6 +214,22 @@ tests = testGroup "Tests"
           , map c2w "you_lis"
           , map c2w "t"
           , map c2w "ening"
+          ] @=? map Exts.toList (Exts.toList res)
+    ]
+  , testGroup "putManyConsLength"
+    [ THU.testCase "A" $ do
+        ref <- newIORef []
+        let txt = "hello_world_are_you_listening" :: [Char]
+        putManyConsLength Nat.constant
+          (\n -> Bounded.word16BE (fromIntegral n))
+          13 ascii txt (ontoRef ref)
+        res <- readIORef ref
+        id $
+          [ 0x00 : 0x0C : map c2w "hello_world"
+          , map c2w "_"
+          , 0x00 : 0x0C : map c2w "are_you_lis"
+          , map c2w "t"
+          , 0x00 : 0x05 : map c2w "ening"
           ] @=? map Exts.toList (Exts.toList res)
     ]
   ]

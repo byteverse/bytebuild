@@ -14,6 +14,7 @@ module Data.ByteArray.Builder
     -- * Evaluation
   , run
   , putMany
+  , putManyConsLength
     -- * Materialized Byte Sequences
   , bytes
   , copy
@@ -120,7 +121,7 @@ import Data.Word (Word64,Word32,Word16,Word8)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (RealWorld,MutableByteArray#,(+#),(-#),(<#))
-import GHC.IO (IO(IO))
+import GHC.IO (IO(IO),stToIO)
 import GHC.ST (ST(ST))
 
 import qualified Arithmetic.Nat as Nat
@@ -168,6 +169,45 @@ putMany hint@(I# hint#) g xs cb = do
           _ <- cb =<< commitsToArray buf off cmts
           pure (BuilderState buf0 0# hint# Initial)
     ) (BuilderState buf0 0# hint# Initial) xs
+  _ <- cb =<< commitsToArray bufZ offZ cmtsZ
+  pure ()
+
+-- | Variant of 'putMany' that prefixes each pushed array of chunks
+-- with the number of bytes that the chunks in each batch required.
+-- (This excludes the bytes required to encode the length itself.)
+-- This is useful for chunked HTTP encoding.
+putManyConsLength :: Foldable f
+  => Arithmetic.Nat n -- ^ Number of bytes used by the serialization of the length
+  -> (Int -> Bounded.Builder n) -- ^ Length serialization function
+  -> Int -- ^ Size of shared chunk (use 8176 if uncertain)
+  -> (a -> Builder) -- ^ Value builder
+  -> f a -- ^ Collection of values
+  -> (UnliftedArray (MutableByteArray RealWorld) -> IO b) -- ^ Consume chunks.
+  -> IO ()
+{-# inline putManyConsLength #-}
+putManyConsLength n buildSize hint g xs cb = do
+  let !(I# n# ) = Nat.demote n
+  let !(I# actual# ) = max hint (I# n# )
+  MutableByteArray buf0 <- PM.newByteArray (I# actual# )
+  BuilderState bufZ offZ _ cmtsZ <- foldlM
+    (\st0 a -> do
+      st1@(BuilderState buf off _ cmts) <- pasteIO (g a) st0
+      case cmts of
+        Initial -> pure st1
+        _ -> do
+          let !dist = commitDistance1 buf0 n# buf off cmts
+          _ <- stToIO $ UnsafeBounded.pasteST
+            (buildSize (fromIntegral (I# dist)))
+            (MutableByteArray buf0)
+            0
+          _ <- cb =<< commitsToArray buf off cmts
+          pure (BuilderState buf0 n# (actual# -# n# ) Initial)
+    ) (BuilderState buf0 n# (actual# -# n# ) Initial) xs
+  let !distZ = commitDistance1 bufZ n# bufZ offZ cmtsZ
+  _ <- stToIO $ UnsafeBounded.pasteST
+    (buildSize (fromIntegral (I# distZ)))
+    (MutableByteArray buf0)
+    0
   _ <- cb =<< commitsToArray bufZ offZ cmtsZ
   pure ()
 
@@ -766,6 +806,9 @@ consLength ::
   -> Builder
 {-# inline consLength #-}
 consLength !n buildSize (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
+  -- There is actually a little bit of unsoundness here. If the number of
+  -- bytes required to encode the length is greater than 4080, this will
+  -- write outside the array, leading to a crash.
   let !(I# lenSz) = Nat.demote n
       !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# lenSz of
         1# -> (# s0, buf0, off0, len0, cs0 #)
@@ -774,11 +817,9 @@ consLength !n buildSize (Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
             (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
    in case f buf1 (off1 +# lenSz) (len1 -# lenSz) cs1 s1 of
         (# s2, buf2, off2, len2, cs2 #) ->
-          let !dist = case Exts.sameMutableByteArray# buf1 buf2 of
-                1# -> off2 -# off1
-                _ -> commitDistance buf1 off2 cs2 -# off1
+          let !dist = commitDistance1 buf1 (off1 +# lenSz) buf2 off2 cs2
               ST g = UnsafeBounded.pasteST
-                (buildSize (fromIntegral (I# (dist -# lenSz))))
+                (buildSize (fromIntegral (I# dist)))
                 (MutableByteArray buf1)
                 (I# off1)
            in case g s2 of
@@ -808,6 +849,20 @@ consLength32BE = consLength Nat.constant (\x -> Bounded.word32BE (fromIntegral x
 -- presented as a big-endian 64-bit word. See 'consLength32BE'.
 consLength64BE :: Builder -> Builder
 consLength64BE = consLength Nat.constant (\x -> Bounded.word64BE (fromIntegral x))
+
+-- Internal. This is like commitDistance, but you get to supply a
+-- head of the commit list that has not yet been committed.
+commitDistance1 ::
+     MutableByteArray# s -- target
+  -> Int# -- offset into target
+  -> MutableByteArray# s -- head of array
+  -> Int# -- offset into head of array
+  -> Commits s
+  -> Int#
+commitDistance1 target offTarget buf0 offBuf cs =
+  case Exts.sameMutableByteArray# target buf0 of
+    1# -> offBuf -# offTarget
+    _ -> commitDistance target offBuf cs -# offTarget
 
 commitDistance :: MutableByteArray# s -> Int# -> Commits s -> Int#
 commitDistance _ !_ Initial = error "chunkDistance: chunk not found"
