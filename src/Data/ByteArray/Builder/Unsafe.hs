@@ -18,6 +18,8 @@ module Data.ByteArray.Builder.Unsafe
   , fromEffect
     -- * Finalization
   , reverseCommitsOntoChunks
+  , copyReverseCommits
+  , addCommitsLength
     -- * Safe Functions
     -- | These functions are actually completely safe, but they are defined
     -- here because they are used by typeclass instances. Import them from
@@ -102,6 +104,13 @@ data Commits s
       !(Commits s)
   | Initial
 
+-- | Add the total number of bytes in the commits to first
+-- argument.
+addCommitsLength :: Int -> Commits s -> Int
+addCommitsLength !acc Initial = acc
+addCommitsLength !acc (Immutable _ _ x cs) = addCommitsLength (acc + I# x) cs
+addCommitsLength !acc (Mutable _ x cs) = addCommitsLength (acc + I# x) cs
+
 -- | Cons the chunks from a list of @Commits@ onto an initial
 -- @Chunks@ list (this argument is often @ChunksNil@). This reverses
 -- the order of the chunks, which is desirable since builders assemble
@@ -119,6 +128,37 @@ reverseCommitsOntoChunks !xs (Mutable buf len cs) = case len of
     shrinkMutableByteArray (MutableByteArray buf) (I# len)
     arr <- PM.unsafeFreezeByteArray (MutableByteArray buf)
     reverseCommitsOntoChunks (ChunksCons (Bytes arr 0 (I# len)) xs) cs
+
+-- | Copy the contents of the chunks into a mutable array, reversing
+-- the order of the chunks.
+-- Precondition: The destination must have enough space to house the
+-- contents. This is not checked.
+copyReverseCommits ::
+     MutableByteArray s -- ^ Destination
+  -> Int -- ^ Destination range successor
+  -> Commits s -- ^ Source
+  -> ST s Int
+{-# inline copyReverseCommits #-}
+copyReverseCommits (MutableByteArray dst) (I# off) cs = ST
+  (\s0 -> case copyReverseCommits# dst off cs s0 of
+    (# s1, nextOff #) -> (# s1, I# nextOff #)
+  )
+
+copyReverseCommits# ::
+     MutableByteArray# s
+  -> Int#
+  -> Commits s
+  -> State# s
+  -> (# State# s, Int# #)
+copyReverseCommits# _ off Initial s0 = (# s0, off #)
+copyReverseCommits# marr prevOff (Mutable arr sz cs) s0 =
+  let !off = prevOff -# sz in
+  case Exts.copyMutableByteArray# arr 0# marr off sz s0 of
+    s1 -> copyReverseCommits# marr off cs s1
+copyReverseCommits# marr prevOff (Immutable arr soff sz cs) s0 =
+  let !off = prevOff -# sz in
+  case Exts.copyByteArray# arr soff marr off sz s0 of
+    s1 -> copyReverseCommits# marr off cs s1
 
 -- | Create a builder from a cons-list of 'Char'. These
 -- are be UTF-8 encoded.

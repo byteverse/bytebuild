@@ -8,7 +8,7 @@
 import Control.Applicative (liftA2)
 import Control.Monad.ST (runST)
 import Data.ByteArray.Builder
-import Data.Bytes.Types (Bytes(Bytes))
+import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
 import Data.Bytes.Chunks (Chunks(ChunksNil,ChunksCons))
 import Data.Primitive (PrimArray)
 import Data.Word
@@ -30,7 +30,6 @@ import qualified Data.ByteString.Lazy.Char8 as LB
 import qualified Data.Bytes.Chunks as Chunks
 import qualified Data.List as L
 import qualified Data.Primitive as PM
-import qualified Data.Primitive.Unlifted.Array as PM
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified GHC.Exts as Exts
@@ -204,15 +203,13 @@ tests = testGroup "Tests"
     [ THU.testCase "A" $ do
         ref <- newIORef []
         let txt = "hello_world_are_you_listening" :: [Char]
-        putMany 7 ascii txt (ontoRef ref)
+        putMany 7 ascii txt (bytesOntoRef ref)
         res <- readIORef ref
         id $
-          [ map c2w "hello_w"
-          , map c2w "o"
-          , map c2w "rld_are"
-          , map c2w "_"
-          , map c2w "you_lis"
-          , map c2w "t"
+          [ map c2w "hello_"
+          , map c2w "world_"
+          , map c2w "are_yo"
+          , map c2w "u_list"
           , map c2w "ening"
           ] @=? map Exts.toList (Exts.toList res)
     ]
@@ -222,33 +219,26 @@ tests = testGroup "Tests"
         let txt = "hello_world_are_you_listening" :: [Char]
         putManyConsLength Nat.constant
           (\n -> Bounded.word16BE (fromIntegral n))
-          13 ascii txt (ontoRef ref)
+          16 ascii txt (bytesOntoRef ref)
         res <- readIORef ref
         id $
-          [ 0x00 : 0x0C : map c2w "hello_world"
-          , map c2w "_"
-          , 0x00 : 0x0C : map c2w "are_you_lis"
-          , map c2w "t"
-          , 0x00 : 0x05 : map c2w "ening"
+          [ 0x00 : 0x0A : map c2w "hello_worl"
+          , 0x00 : 0x0A : map c2w "d_are_you_"
+          , 0x00 : 0x09 : map c2w "listening"
           ] @=? map Exts.toList (Exts.toList res)
     ]
   ]
 
-ontoRef ::
+bytesOntoRef ::
      IORef [PM.ByteArray]
-  -> PM.UnliftedArray (PM.MutableByteArray Exts.RealWorld)
+  -> MutableBytes Exts.RealWorld
   -> IO ()
-ontoRef !ref xs = do
+bytesOntoRef !ref (MutableBytes buf off len) = do
   rs <- readIORef ref
-  ps <- PM.foldlUnliftedArrayM'
-    (\ys buf -> do
-      len <- PM.getSizeofMutableByteArray buf
-      dst <- PM.newByteArray len
-      PM.copyMutableByteArray dst 0 buf 0 len
-      dst' <- PM.unsafeFreezeByteArray dst
-      pure (ys ++ [dst'])
-    ) [] xs
-  writeIORef ref (rs ++ ps)
+  dst <- PM.newByteArray len
+  PM.copyMutableByteArray dst 0 buf off len
+  dst' <- PM.unsafeFreezeByteArray dst
+  writeIORef ref (rs ++ [dst'])
 
 instance Arbitrary Chunks where
   arbitrary = do
