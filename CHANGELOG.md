@@ -6,6 +6,7 @@
   array over and over.
 * Add `consLength`.
 * Add `putManyConsLength`, useful for chunked HTTP encoding.
+* Add `runOnto`
 
 ## 0.3.1.0 -- 2019-11-20
 

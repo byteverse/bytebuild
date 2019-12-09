@@ -13,6 +13,7 @@ module Data.ByteArray.Builder
   , fromBounded
     -- * Evaluation
   , run
+  , runOnto
   , putMany
   , putManyConsLength
     -- * Materialized Byte Sequences
@@ -139,12 +140,21 @@ run ::
      Int -- ^ Size of initial chunk (use 4080 if uncertain)
   -> Builder -- ^ Builder
   -> Chunks
-run hint@(I# hint# ) (Builder f) = runST $ do
+run !hint bldr = runOnto hint bldr ChunksNil
+
+-- | Run a builder. The resulting chunks are consed onto the
+-- beginning of an existing sequence of chunks.
+runOnto ::
+     Int -- ^ Size of initial chunk (use 4080 if uncertain)
+  -> Builder -- ^ Builder
+  -> Chunks
+  -> Chunks
+runOnto hint@(I# hint# ) (Builder f) cs0 = runST $ do
   MutableByteArray buf0 <- PM.newByteArray hint
   cs <- ST $ \s0 -> case f buf0 0# hint# Initial s0 of
     (# s1, bufX, offX, _, csX #) ->
       (# s1, Mutable bufX offX csX #)
-  reverseCommitsOntoChunks ChunksNil cs
+  reverseCommitsOntoChunks cs0 cs
 
 -- | Run a builder against lots of elements. This fills the same
 -- underlying buffer over and over again. Do not let the argument to
