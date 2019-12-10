@@ -1,5 +1,6 @@
 {-# language BangPatterns #-}
 {-# language DerivingStrategies #-}
+{-# language DuplicateRecordFields #-}
 {-# language TypeFamilies #-}
 {-# language MagicHash #-}
 {-# language UnboxedTuples #-}
@@ -10,12 +11,13 @@ module Data.Bytes.Chunks
   , concat
   , reverse
   , reverseOnto
+  , length
   ) where
 
 import Prelude hiding (length,concat,reverse)
 
 import GHC.ST (ST(..))
-import Data.Bytes.Types (Bytes(..))
+import Data.Bytes.Types (Bytes(Bytes))
 import Data.Primitive (ByteArray(..),MutableByteArray(..))
 import GHC.Exts (ByteArray#,MutableByteArray#)
 import GHC.Exts (Int#,State#,Int(I#),(+#))
@@ -23,6 +25,7 @@ import Control.Monad.ST.Run (runByteArrayST)
 
 import qualified GHC.Exts as Exts
 import qualified Data.Primitive as PM
+import qualified Data.Bytes.Types as B
 
 data Chunks
   = ChunksCons {-# UNPACK #-} !Bytes !Chunks
@@ -61,10 +64,13 @@ concat# (ChunksCons (Bytes{array=c,offset=coff,length=szc}) cs) = case cs of
       _ <- copy dst szboth ds
       PM.unsafeFreezeByteArray dst
 
+length :: Chunks -> Int
+length = chunksLengthGo 0
+
 chunksLengthGo :: Int -> Chunks -> Int
 chunksLengthGo !n ChunksNil = n
-chunksLengthGo !n (ChunksCons (Bytes{length}) cs) =
-  chunksLengthGo (n + length) cs
+chunksLengthGo !n (ChunksCons (Bytes{B.length=len}) cs) =
+  chunksLengthGo (n + len) cs
 
 -- | Copy the contents of the chunks into a mutable array.
 -- Precondition: The destination must have enough space to
@@ -82,9 +88,9 @@ copy (MutableByteArray dst) (I# off) cs = ST
 
 copy# :: MutableByteArray# s -> Int# -> Chunks -> State# s -> (# State# s, Int# #)
 copy# _ off ChunksNil s0 = (# s0, off #)
-copy# marr off (ChunksCons (Bytes{array,offset,length}) cs) s0 =
-  case Exts.copyByteArray# (unBa array) (unI offset) marr off (unI length) s0 of
-    s1 -> copy# marr (off +# unI length) cs s1
+copy# marr off (ChunksCons (Bytes{B.array,B.offset,B.length=len}) cs) s0 =
+  case Exts.copyByteArray# (unBa array) (unI offset) marr off (unI len) s0 of
+    s1 -> copy# marr (off +# unI len) cs s1
 
 
 -- | Reverse chunks but not the bytes within each chunk.
