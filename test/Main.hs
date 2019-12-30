@@ -64,6 +64,10 @@ tests = testGroup "Tests"
         runConcat 1 (word64PaddedUpperHex w)
         ===
         pack (showWord64PaddedUpperHex w)
+    , TQC.testProperty "wordPaddedTwoDigitDec" $ TQC.forAll (TQC.choose (0,99)) $ \w ->
+        Bounded.run Nat.two (Bounded.wordPaddedTwoDigitDec w)
+        ===
+        pack (zeroPadL 2 (show w))
     , TQC.testProperty "word8Dec" $ \w ->
         runConcat 1 (word8Dec w)
         ===
@@ -278,3 +282,8 @@ c2w = fromIntegral . ord
 
 instance Arbitrary Word128 where
   arbitrary = liftA2 Word128 TQC.arbitrary TQC.arbitrary
+
+zeroPadL :: Int -> String -> String
+zeroPadL n s
+  | length s < n = replicate (n - length s) '0' ++ s
+  | otherwise = s
