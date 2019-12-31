@@ -52,7 +52,8 @@ module Data.ByteArray.Builder.Bounded
   , ascii
   , char
     -- ** Native
-  , wordPaddedTwoDigitDec
+  , wordPaddedDec2
+  , wordPaddedDec9
     -- ** Machine-Readable
     -- *** One
   , word8
@@ -528,17 +529,42 @@ word8LowerHex# w#
 -- two digits. For example: 0 is encoded as @00@, 5 is encoded as @05@, and
 -- 73 is encoded as @73@.
 --
--- Precondition: Argument less than 100. Failure to satisfy this precondition
--- will not result in a segfault, but the resulting bytes are undefined. The
--- implement uses a heuristic for division that is inaccurate for large
--- numbers.
-wordPaddedTwoDigitDec :: Word -> Builder 2
-wordPaddedTwoDigitDec !w = Unsafe.construct $ \arr off -> do
+-- Precondition: Argument must be less than 100. Failure to satisfy this
+-- precondition will not result in a segfault, but the resulting bytes are
+-- undefined. The implemention uses a heuristic for division that is inaccurate
+-- for large numbers.
+wordPaddedDec2 :: Word -> Builder 2
+wordPaddedDec2 !w = Unsafe.construct $ \arr off -> do
   let d1 = approxDiv10 w
       d2 = w - (10 * d1)
   writeByteArray arr off (unsafeWordToWord8 (d1 + 48))
   writeByteArray arr (off + 1) (unsafeWordToWord8 (d2 + 48))
   pure (off + 2)
+
+-- | Encode a number less than 1e9 as a decimal number, zero-padding it to
+-- nine digits. For example: 0 is encoded as @000000000@ and 5 is encoded as
+-- @000000005@.
+--
+-- Precondition: Argument must be less than 1e9. Failure to satisfy this
+-- precondition will not result in a segfault, but the resulting bytes are
+-- undefined. The implemention uses a heuristic for division that is inaccurate
+-- for large numbers.
+wordPaddedDec9 :: Word -> Builder 9
+wordPaddedDec9 !w = Unsafe.construct $ \arr off -> do
+  putRem10
+    (putRem10 $ putRem10 $ putRem10 $ putRem10 $ putRem10 $
+     putRem10 $ putRem10 $ putRem10
+     (\_ _ _ -> pure ())
+    ) arr (off + 8) w
+  pure (off + 9)
+
+putRem10 :: (MutableByteArray s -> Int -> Word -> ST s a) -> MutableByteArray s -> Int -> Word -> ST s a
+{-# inline putRem10 #-}
+putRem10 andThen arr off dividend = do
+  let quotient = approxDiv10 dividend
+      remainder = dividend - (10 * quotient)
+  writeByteArray arr off (unsafeWordToWord8 (remainder + 48))
+  andThen arr (off - 1) quotient
 
 -- | Encode an ASCII character.
 -- Precondition: Input must be an ASCII character. This is not checked.
@@ -824,6 +850,7 @@ logBase10 :: Double -> Double
 logBase10 d = log d / 2.30258509299
 
 -- Based on C code from https://stackoverflow.com/a/5558614
+-- For numbers less than 1073741829, this gives a correct answer.
 approxDiv10 :: Word -> Word
 approxDiv10 !n = unsafeShiftR (0x1999999A * n) 32
 

@@ -64,10 +64,14 @@ tests = testGroup "Tests"
         runConcat 1 (word64PaddedUpperHex w)
         ===
         pack (showWord64PaddedUpperHex w)
-    , TQC.testProperty "wordPaddedTwoDigitDec" $ TQC.forAll (TQC.choose (0,99)) $ \w ->
-        Bounded.run Nat.two (Bounded.wordPaddedTwoDigitDec w)
+    , TQC.testProperty "wordPaddedDec2" $ TQC.forAll (TQC.choose (0,99)) $ \w ->
+        Bounded.run Nat.two (Bounded.wordPaddedDec2 w)
         ===
         pack (zeroPadL 2 (show w))
+    , TQC.testProperty "wordPaddedDec9" $ TQC.forAll (TQC.choose (0,999999999)) $ \w ->
+        Bounded.run Nat.constant (Bounded.wordPaddedDec9 w)
+        ===
+        pack (zeroPadL 9 (show w))
     , TQC.testProperty "word8Dec" $ \w ->
         runConcat 1 (word8Dec w)
         ===

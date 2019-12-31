@@ -8,7 +8,7 @@
 * Add `putManyConsLength`, useful for chunked HTTP encoding.
 * Add `runOnto`
 * Add `Data.Bytes.Chunks.length`
-* Add `wordPaddedTwoDigitDec`
+* Add `wordPaddedDec2` and `wordPaddedDec9`.
 
 ## 0.3.1.0 -- 2019-11-20
 
