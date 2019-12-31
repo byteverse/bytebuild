@@ -51,6 +51,8 @@ module Data.ByteArray.Builder.Bounded
   , word8LowerHex
   , ascii
   , char
+    -- ** Native
+  , wordPaddedTwoDigitDec
     -- ** Machine-Readable
     -- *** One
   , word8
@@ -522,6 +524,22 @@ word8LowerHex# w#
   where
   w = W# w#
 
+-- | Encode a number less than 100 as a decimal number, zero-padding it to
+-- two digits. For example: 0 is encoded as @00@, 5 is encoded as @05@, and
+-- 73 is encoded as @73@.
+--
+-- Precondition: Argument less than 100. Failure to satisfy this precondition
+-- will not result in a segfault, but the resulting bytes are undefined. The
+-- implement uses a heuristic for division that is inaccurate for large
+-- numbers.
+wordPaddedTwoDigitDec :: Word -> Builder 2
+wordPaddedTwoDigitDec !w = Unsafe.construct $ \arr off -> do
+  let d1 = approxDiv10 w
+      d2 = w - (10 * d1)
+  writeByteArray arr off (unsafeWordToWord8 (d1 + 48))
+  writeByteArray arr (off + 1) (unsafeWordToWord8 (d2 + 48))
+  pure (off + 2)
+
 -- | Encode an ASCII character.
 -- Precondition: Input must be an ASCII character. This is not checked.
 ascii :: Char -> Builder 1
@@ -560,9 +578,6 @@ char c
   where
     codepoint :: Word
     codepoint = fromIntegral (ord c)
-
-    unsafeWordToWord8 :: Word -> Word8
-    unsafeWordToWord8 (W# w) = W8# w
 
     -- precondition: codepoint is less than 0x800
     byteTwoOne :: Word -> Word
@@ -807,3 +822,10 @@ unIntST s0 (ST f) = case f s0 of
 -- result anyway. Hmm...
 logBase10 :: Double -> Double
 logBase10 d = log d / 2.30258509299
+
+-- Based on C code from https://stackoverflow.com/a/5558614
+approxDiv10 :: Word -> Word
+approxDiv10 !n = unsafeShiftR (0x1999999A * n) 32
+
+unsafeWordToWord8 :: Word -> Word8
+unsafeWordToWord8 (W# w) = W8# w
