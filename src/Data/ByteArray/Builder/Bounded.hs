@@ -524,8 +524,14 @@ word8LowerHex# w#
   where
   w = W# w#
 
--- Precondition: argument less than 100. Nothing terrible happens if this is
--- not the case.
+-- | Encode a number less than 100 as a decimal number, zero-padding it to
+-- two digits. For example: 0 is encoded as @00@, 5 is encoded as @05@, and
+-- 73 is encoded as @73@.
+--
+-- Precondition: Argument less than 100. Failure to satisfy this precondition
+-- will not result in a segfault, but the resulting bytes are undefined. The
+-- implement uses a heuristic for division that is inaccurate for large
+-- numbers.
 wordPaddedTwoDigitDec :: Word -> Builder 2
 wordPaddedTwoDigitDec !w = Unsafe.construct $ \arr off -> do
   let d1 = approxDiv10 w
