@@ -47,6 +47,7 @@ module Data.ByteArray.Builder.Bounded
   , word16LowerHex
   , word16UpperHex
     -- ** 8-bit
+  , word8PaddedLowerHex
   , word8PaddedUpperHex
   , word8LowerHex
   , ascii
@@ -382,6 +383,12 @@ word8LowerHex (W8# w) = word8LowerHex# w
 -- uppercase for the alphabetical digits.
 word8PaddedUpperHex :: Word8 -> Builder 2
 word8PaddedUpperHex (W8# w) = word8PaddedUpperHex# w
+
+-- | Requires exactly 2 bytes. Encodes a 8-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 2 digits. This uses
+-- lowercase for the alphabetical digits.
+word8PaddedLowerHex :: Word8 -> Builder 2
+word8PaddedLowerHex (W8# w) = word8PaddedLowerHex# w
 
 -- TODO: Is it actually worth unrolling this loop. I suspect that it
 -- might not be. Benchmark this.

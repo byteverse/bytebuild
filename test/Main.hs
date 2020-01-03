@@ -64,6 +64,10 @@ tests = testGroup "Tests"
         runConcat 1 (word64PaddedUpperHex w)
         ===
         pack (showWord64PaddedUpperHex w)
+    , TQC.testProperty "word16PaddedLowerHex" $ \w ->
+        runConcat 1 (word16PaddedLowerHex w)
+        ===
+        pack (showWord16PaddedLowerHex w)
     , TQC.testProperty "wordPaddedDec2" $ TQC.forAll (TQC.choose (0,99)) $ \w ->
         Bounded.run Nat.two (Bounded.wordPaddedDec2 w)
         ===
@@ -277,6 +281,9 @@ packUtf8 = Exts.fromList . ByteString.unpack . TE.encodeUtf8 . T.pack
 
 showWord64PaddedUpperHex :: Word64 -> String
 showWord64PaddedUpperHex = printf "%016X" 
+
+showWord16PaddedLowerHex :: Word16 -> String
+showWord16PaddedLowerHex = printf "%04x" 
 
 runConcat :: Int -> Builder -> ByteArray
 runConcat n = Chunks.concat . run n

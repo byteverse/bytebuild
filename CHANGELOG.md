@@ -9,6 +9,7 @@
 * Add `runOnto`
 * Add `Data.Bytes.Chunks.length`
 * Add `wordPaddedDec2` and `wordPaddedDec9`.
+* Add `word8PaddedLowerHex`.
 
 ## 0.3.1.0 -- 2019-11-20
 
