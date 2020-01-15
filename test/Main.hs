@@ -8,14 +8,12 @@
 import Control.Applicative (liftA2)
 import Control.Monad.ST (runST)
 import Data.ByteArray.Builder
-import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
-import Data.Bytes.Chunks (Chunks(ChunksNil,ChunksCons))
+import Data.Bytes.Types (MutableBytes(MutableBytes))
 import Data.Primitive (PrimArray)
 import Data.Word
 import Data.Char (ord,chr)
 import Data.IORef (IORef,newIORef,readIORef,writeIORef)
 import Data.Primitive (ByteArray)
-import Data.Proxy (Proxy(..))
 import Data.WideWord (Word128(Word128))
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.QuickCheck ((===),Arbitrary)
@@ -33,7 +31,6 @@ import qualified Data.Primitive as PM
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified GHC.Exts as Exts
-import qualified Test.QuickCheck.Classes as QCC
 import qualified Test.Tasty.HUnit as THU
 import qualified Test.Tasty.QuickCheck as TQC
 
@@ -206,11 +203,6 @@ tests = testGroup "Tests"
         ===
         pack (showWord64PaddedUpperHex x <> showWord64PaddedUpperHex y)
     ]
-  , testGroup "Chunks"
-    [ lawsToTest (QCC.eqLaws (Proxy :: Proxy Chunks))
-    , lawsToTest (QCC.semigroupLaws (Proxy :: Proxy Chunks))
-    , lawsToTest (QCC.monoidLaws (Proxy :: Proxy Chunks))
-    ]
   , testGroup "putMany"
     [ THU.testCase "A" $ do
         ref <- newIORef []
@@ -251,21 +243,6 @@ bytesOntoRef !ref (MutableBytes buf off len) = do
   PM.copyMutableByteArray dst 0 buf off len
   dst' <- PM.unsafeFreezeByteArray dst
   writeIORef ref (rs ++ [dst'])
-
-instance Arbitrary Chunks where
-  arbitrary = do
-    xs :: [[Word8]] <- TQC.arbitrary
-    let ys = map
-          (\x -> Exts.fromList ([255] ++ x ++ [255]))
-          xs
-        zs = foldr
-          (\b cs ->
-            ChunksCons (Bytes b 1 (PM.sizeofByteArray b - 2)) cs
-          ) ChunksNil ys
-    pure zs
-
-lawsToTest :: QCC.Laws -> TestTree
-lawsToTest (QCC.Laws name pairs) = testGroup name (map (uncurry TQC.testProperty) pairs)
 
 replicateByte :: Int -> Word8 -> ByteArray
 replicateByte n w = runST $ do
