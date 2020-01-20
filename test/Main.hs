@@ -263,7 +263,7 @@ showWord16PaddedLowerHex :: Word16 -> String
 showWord16PaddedLowerHex = printf "%04x" 
 
 runConcat :: Int -> Builder -> ByteArray
-runConcat n = Chunks.concat . run n
+runConcat n = Chunks.concatU . run n
 
 c2w :: Char -> Word8
 c2w = fromIntegral . ord

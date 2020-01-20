@@ -1,6 +1,6 @@
 # Revision history for small-bytearray-builder
 
-## 0.3.2.0 -- 2019-??-??
+## 0.3.2.0 -- 2020-01-20
 
 * Add `putMany`, which allows pasting into the same mutable byte
   array over and over.

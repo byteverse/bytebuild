@@ -19,8 +19,8 @@ description:
   of the next chunk. This strategy for building is suitable for most
   CSVs and several line protocols (carbon, InfluxDB, etc.).
   
-homepage: https://github.com/andrewthad/small-bytearray-builder
-bug-reports: https://github.com/andrewthad/small-bytearray-builder/issues
+homepage: https://github.com/byteverse/small-bytearray-builder
+bug-reports: https://github.com/byteverse/small-bytearray-builder/issues
 license: BSD-3-Clause
 license-file: LICENSE
 author: Andrew Martin
