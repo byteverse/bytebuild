@@ -66,6 +66,7 @@ module Data.ByteArray.Builder.Bounded
     -- *** One
   , word8
     -- **** Big Endian
+  , word256BE
   , word128BE
   , word64BE
   , word32BE
@@ -74,6 +75,7 @@ module Data.ByteArray.Builder.Bounded
   , int32BE
   , int16BE
     -- **** Little Endian
+  , word256LE
   , word128LE
   , word64LE
   , word32LE
@@ -763,6 +765,12 @@ word128LE (Word128 hi lo) = append (word64LE lo) (word64LE hi)
 
 word128BE :: Word128 -> Builder 16
 word128BE (Word128 hi lo) = append (word64BE hi) (word64BE lo)
+
+word256LE :: Word256 -> Builder 32
+word256LE (Word256 hi mhi mlo lo) = word64LE lo `append` word64LE mlo `append` word64LE mhi `append` word64LE hi
+
+word256BE :: Word256 -> Builder 32
+word256BE (Word256 hi mhi mlo lo) = word64BE hi `append` word64BE mhi `append` word64BE mlo `append` word64BE lo
 
 -- | Requires exactly 8 bytes. Dump the octets of a 64-bit
 -- word in a little-endian fashion.

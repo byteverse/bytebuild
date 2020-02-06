@@ -57,6 +57,7 @@ module Data.ByteArray.Builder
     -- *** One
   , word8
     -- **** Big Endian
+  , word256BE
   , word128BE
   , word64BE
   , word32BE
@@ -65,6 +66,7 @@ module Data.ByteArray.Builder
   , int32BE
   , int16BE
     -- **** Little Endian
+  , word256LE
   , word128LE
   , word64LE
   , word32LE
@@ -79,6 +81,7 @@ module Data.ByteArray.Builder
   , word32ArrayBE
   , word64ArrayBE
   , word128ArrayBE
+  , word256ArrayBE
   , int64ArrayBE
   , int32ArrayBE
   , int16ArrayBE
@@ -87,6 +90,7 @@ module Data.ByteArray.Builder
   , word32ArrayLE
   , word64ArrayLE
   , word128ArrayLE
+  , word256ArrayLE
   , int64ArrayLE
   , int32ArrayLE
   , int16ArrayLE
@@ -119,7 +123,7 @@ import Data.Foldable (foldlM)
 import Data.Int (Int64,Int32,Int16,Int8)
 import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
 import Data.Text.Short (ShortText)
-import Data.WideWord (Word128)
+import Data.WideWord (Word128,Word256)
 import Data.Word (Word64,Word32,Word16,Word8)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
@@ -390,6 +394,16 @@ word128ArrayBE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
   BigEndian -> bytes (Bytes (ByteArray arr) (soff0 * 16) (slen0 * 16))
   LittleEndian -> word128ArraySwap src soff0 slen0
 
+word256ArrayLE :: PrimArray Word256 -> Int -> Int -> Builder
+word256ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  LittleEndian -> bytes (Bytes (ByteArray arr) (soff0 * 32) (slen0 * 32))
+  BigEndian -> word256ArraySwap src soff0 slen0
+
+word256ArrayBE :: PrimArray Word256 -> Int -> Int -> Builder
+word256ArrayBE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
+  BigEndian -> bytes (Bytes (ByteArray arr) (soff0 * 32) (slen0 * 32))
+  LittleEndian -> word256ArraySwap src soff0 slen0
+
 word64ArrayLE :: PrimArray Word64 -> Int -> Int -> Builder
 word64ArrayLE src@(PrimArray arr) soff0 slen0 = case targetByteOrder of
   LittleEndian -> bytes (Bytes (ByteArray arr) (soff0 * 8) (slen0 * 8))
@@ -523,6 +537,28 @@ word128ArraySwap src soff0 slen0 =
       PM.writeByteArray dst (doff + 14) v1
       PM.writeByteArray dst (doff + 15) v0
       go (soff + 16) send dst (doff + 16)
+    else pure doff
+
+word256ArraySwap :: PrimArray Word256 -> Int -> Int -> Builder
+word256ArraySwap src soff0 slen0 =
+  fromFunction (slen0 * 32) (go (soff0 * 32) ((soff0 + slen0) * 32))
+  where
+  -- TODO: Perhaps we could put byteswapping functions to use
+  -- rather than indexing tons of Word8s. This could be done
+  -- both here and in the other swap functions. There are a
+  -- decent number of tests for these array-swapping functions,
+  -- which makes changing this less scary.
+  go :: Int -> Int -> MutableByteArray s -> Int -> ST s Int
+  go !soff !send !dst !doff = if soff < send
+    then do
+      let loop !i
+            | i < 32 = do
+              let v = PM.indexPrimArray (asWord8s src) (soff + i)
+              PM.writeByteArray dst (doff + (31 - i)) v
+              loop (i + 1)
+            | otherwise = pure ()
+      loop 0
+      go (soff + 32) send dst (doff + 32)
     else pure doff
 
 asWord8s :: PrimArray a -> PrimArray Word8
@@ -766,6 +802,11 @@ int32BE w = fromBounded Nat.constant (Bounded.int32BE w)
 int16BE :: Int16 -> Builder
 int16BE w = fromBounded Nat.constant (Bounded.int16BE w)
 
+-- | Requires exactly 32 bytes. Dump the octets of a 256-bit
+-- word in a little-endian fashion.
+word256LE :: Word256 -> Builder
+word256LE w = fromBounded Nat.constant (Bounded.word256LE w)
+
 -- | Requires exactly 16 bytes. Dump the octets of a 128-bit
 -- word in a little-endian fashion.
 word128LE :: Word128 -> Builder
@@ -786,15 +827,21 @@ word32LE w = fromBounded Nat.constant (Bounded.word32LE w)
 word16LE :: Word16 -> Builder
 word16LE w = fromBounded Nat.constant (Bounded.word16LE w)
 
--- | Requires exactly 8 bytes. Dump the octets of a 64-bit
+
+-- | Requires exactly 32 bytes. Dump the octets of a 256-bit
 -- word in a big-endian fashion.
-word64BE :: Word64 -> Builder
-word64BE w = fromBounded Nat.constant (Bounded.word64BE w)
+word256BE :: Word256 -> Builder
+word256BE w = fromBounded Nat.constant (Bounded.word256BE w)
 
 -- | Requires exactly 16 bytes. Dump the octets of a 128-bit
 -- word in a big-endian fashion.
 word128BE :: Word128 -> Builder
 word128BE w = fromBounded Nat.constant (Bounded.word128BE w)
+
+-- | Requires exactly 8 bytes. Dump the octets of a 64-bit
+-- word in a big-endian fashion.
+word64BE :: Word64 -> Builder
+word64BE w = fromBounded Nat.constant (Bounded.word64BE w)
 
 -- | Requires exactly 4 bytes. Dump the octets of a 32-bit
 -- word in a big-endian fashion.
