@@ -14,7 +14,7 @@ import Data.Word
 import Data.Char (ord,chr)
 import Data.IORef (IORef,newIORef,readIORef,writeIORef)
 import Data.Primitive (ByteArray)
-import Data.WideWord (Word128(Word128))
+import Data.WideWord (Word128(Word128),Word256(Word256))
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.QuickCheck ((===),Arbitrary)
 import Text.Printf (printf)
@@ -57,6 +57,14 @@ tests = testGroup "Tests"
         runConcat 1 (word64BE x <> word64BE y <> word64BE z)
         ===
         pack (LB.unpack (BB.toLazyByteString (BB.word64BE x <> BB.word64BE y <> BB.word64BE z)))
+    , TQC.testProperty "word256PaddedLowerHex" $ \w ->
+        Bounded.run Nat.constant (Bounded.word256PaddedLowerHex w)
+        ===
+        pack (showWord256PaddedLowerHex w)
+    , TQC.testProperty "word128PaddedUpperHex" $ \w ->
+        Bounded.run Nat.constant (Bounded.word128PaddedUpperHex w)
+        ===
+        pack (showWord128PaddedUpperHex w)
     , TQC.testProperty "word64PaddedUpperHex" $ \w ->
         runConcat 1 (word64PaddedUpperHex w)
         ===
@@ -256,11 +264,17 @@ pack = Exts.fromList . map (fromIntegral @Int @Word8 . ord)
 packUtf8 :: String -> ByteArray
 packUtf8 = Exts.fromList . ByteString.unpack . TE.encodeUtf8 . T.pack
 
+showWord256PaddedLowerHex :: Word256 -> String
+showWord256PaddedLowerHex (Word256 hi mhi mlo lo) = printf "%016x%016x%016x%016x" hi mhi mlo lo
+
+showWord128PaddedUpperHex :: Word128 -> String
+showWord128PaddedUpperHex (Word128 hi lo) = printf "%016X%016X" hi lo
+
 showWord64PaddedUpperHex :: Word64 -> String
-showWord64PaddedUpperHex = printf "%016X" 
+showWord64PaddedUpperHex = printf "%016X"
 
 showWord16PaddedLowerHex :: Word16 -> String
-showWord16PaddedLowerHex = printf "%04x" 
+showWord16PaddedLowerHex = printf "%04x"
 
 runConcat :: Int -> Builder -> ByteArray
 runConcat n = Chunks.concatU . run n
@@ -270,6 +284,9 @@ c2w = fromIntegral . ord
 
 instance Arbitrary Word128 where
   arbitrary = liftA2 Word128 TQC.arbitrary TQC.arbitrary
+
+instance Arbitrary Word256 where
+  arbitrary = Word256 <$> TQC.arbitrary <*> TQC.arbitrary <*> TQC.arbitrary <*> TQC.arbitrary
 
 zeroPadL :: Int -> String -> String
 zeroPadL n s
