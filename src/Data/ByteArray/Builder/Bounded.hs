@@ -37,9 +37,16 @@ module Data.ByteArray.Builder.Bounded
   , int8Dec
   , intDec
     -- * Unsigned Words
+    -- ** Wide Words
+  , word128PaddedLowerHex
+  , word128PaddedUpperHex
+  , word256PaddedLowerHex
+  , word256PaddedUpperHex
     -- ** 64-bit
+  , word64PaddedLowerHex
   , word64PaddedUpperHex
     -- ** 32-bit
+  , word32PaddedLowerHex
   , word32PaddedUpperHex
     -- ** 16-bit
   , word16PaddedLowerHex
@@ -87,7 +94,7 @@ import Data.ByteArray.Builder.Bounded.Unsafe (Builder(..))
 import Data.Char (ord)
 import Data.Primitive
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
-import Data.WideWord (Word128(Word128))
+import Data.WideWord (Word128(Word128),Word256(Word256))
 import GHC.Exts
 import GHC.Int (Int64(I64#),Int32(I32#),Int16(I16#),Int8(I8#))
 import GHC.ST (ST(ST))
@@ -323,6 +330,44 @@ toHexLower w' = fromIntegral
   loSolved = w + 48
   hiSolved = w + 87
 
+-- | Requires exactly 64 bytes. Encodes a 256-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 64 digits. This uses
+-- lowercase for the alphabetical digits.
+word256PaddedLowerHex :: Word256 -> Builder 64
+word256PaddedLowerHex (Word256 w192 w128 w64 w0) =
+           word64PaddedLowerHex w192
+  `append` word64PaddedLowerHex w128
+  `append` word64PaddedLowerHex w64
+  `append` word64PaddedLowerHex w0
+
+-- | Requires exactly 64 bytes. Encodes a 256-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 64 digits. This uses
+-- uppercase for the alphabetical digits.
+word256PaddedUpperHex :: Word256 -> Builder 64
+word256PaddedUpperHex (Word256 w192 w128 w64 w0) =
+           word64PaddedUpperHex w192
+  `append` word64PaddedUpperHex w128
+  `append` word64PaddedUpperHex w64
+  `append` word64PaddedUpperHex w0
+
+
+-- | Requires exactly 32 bytes. Encodes a 128-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 32 digits. This uses
+-- lowercase for the alphabetical digits.
+word128PaddedLowerHex :: Word128 -> Builder 32
+word128PaddedLowerHex (Word128 w64 w0) =
+           word64PaddedLowerHex w64
+  `append` word64PaddedLowerHex w0
+
+-- | Requires exactly 32 bytes. Encodes a 128-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 32 digits. This uses
+-- uppercase for the alphabetical digits.
+word128PaddedUpperHex :: Word128 -> Builder 32
+word128PaddedUpperHex (Word128 w64 w0) =
+           word64PaddedUpperHex w64
+  `append` word64PaddedUpperHex w0
+
+
 -- | Requires exactly 16 bytes. Encodes a 64-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 16 digits. This uses
 -- uppercase for the alphabetical digits. For example, this encodes the
@@ -330,11 +375,24 @@ toHexLower w' = fromIntegral
 word64PaddedUpperHex :: Word64 -> Builder 16
 word64PaddedUpperHex (W64# w) = word64PaddedUpperHex# w
 
+-- | Requires exactly 16 bytes. Encodes a 64-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 16 digits. This uses
+-- lowercase for the alphabetical digits. For example, this encodes the
+-- number 1022 as @00000000000003fe@.
+word64PaddedLowerHex :: Word64 -> Builder 16
+word64PaddedLowerHex (W64# w) = word64PaddedLowerHex# w
+
 -- | Requires exactly 8 bytes. Encodes a 32-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 8 digits. This uses
 -- uppercase for the alphabetical digits.
 word32PaddedUpperHex :: Word32 -> Builder 8
 word32PaddedUpperHex (W32# w) = word32PaddedUpperHex# w
+
+-- | Requires exactly 8 bytes. Encodes a 32-bit unsigned integer as
+-- hexadecimal, zero-padding the encoding to 8 digits. This uses
+-- lowercase for the alphabetical digits.
+word32PaddedLowerHex :: Word32 -> Builder 8
+word32PaddedLowerHex (W32# w) = word32PaddedLowerHex# w
 
 -- | Requires exactly 4 bytes. Encodes a 16-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 4 digits. This uses
@@ -415,6 +473,31 @@ word64PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   where
   w = W# w#
 
+-- TODO: Is it actually worth unrolling this loop. I suspect that it
+-- might not be. Benchmark this.
+word64PaddedLowerHex# :: Word# -> Builder 16
+{-# noinline word64PaddedLowerHex# #-}
+word64PaddedLowerHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexLower (unsafeShiftR w 60))
+  writeByteArray arr (off + 1) (toHexLower (unsafeShiftR w 56))
+  writeByteArray arr (off + 2) (toHexLower (unsafeShiftR w 52))
+  writeByteArray arr (off + 3) (toHexLower (unsafeShiftR w 48))
+  writeByteArray arr (off + 4) (toHexLower (unsafeShiftR w 44))
+  writeByteArray arr (off + 5) (toHexLower (unsafeShiftR w 40))
+  writeByteArray arr (off + 6) (toHexLower (unsafeShiftR w 36))
+  writeByteArray arr (off + 7) (toHexLower (unsafeShiftR w 32))
+  writeByteArray arr (off + 8) (toHexLower (unsafeShiftR w 28))
+  writeByteArray arr (off + 9) (toHexLower (unsafeShiftR w 24))
+  writeByteArray arr (off + 10) (toHexLower (unsafeShiftR w 20))
+  writeByteArray arr (off + 11) (toHexLower (unsafeShiftR w 16))
+  writeByteArray arr (off + 12) (toHexLower (unsafeShiftR w 12))
+  writeByteArray arr (off + 13) (toHexLower (unsafeShiftR w 8))
+  writeByteArray arr (off + 14) (toHexLower (unsafeShiftR w 4))
+  writeByteArray arr (off + 15) (toHexLower (unsafeShiftR w 0))
+  pure (off + 16)
+  where
+  w = W# w#
+
 word32PaddedUpperHex# :: Word# -> Builder 8
 {-# noinline word32PaddedUpperHex# #-}
 word32PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
@@ -426,6 +509,21 @@ word32PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   writeByteArray arr (off + 5) (toHexUpper (unsafeShiftR w 8))
   writeByteArray arr (off + 6) (toHexUpper (unsafeShiftR w 4))
   writeByteArray arr (off + 7) (toHexUpper (unsafeShiftR w 0))
+  pure (off + 8)
+  where
+  w = W# w#
+
+word32PaddedLowerHex# :: Word# -> Builder 8
+{-# noinline word32PaddedLowerHex# #-}
+word32PaddedLowerHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexLower (unsafeShiftR w 28))
+  writeByteArray arr (off + 1) (toHexLower (unsafeShiftR w 24))
+  writeByteArray arr (off + 2) (toHexLower (unsafeShiftR w 20))
+  writeByteArray arr (off + 3) (toHexLower (unsafeShiftR w 16))
+  writeByteArray arr (off + 4) (toHexLower (unsafeShiftR w 12))
+  writeByteArray arr (off + 5) (toHexLower (unsafeShiftR w 8))
+  writeByteArray arr (off + 6) (toHexLower (unsafeShiftR w 4))
+  writeByteArray arr (off + 7) (toHexLower (unsafeShiftR w 0))
   pure (off + 8)
   where
   w = W# w#
