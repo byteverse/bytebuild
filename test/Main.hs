@@ -201,6 +201,16 @@ tests = testGroup "Tests"
          in runConcat 1 (foldMap word128BE xs)
             ===
             runConcat 1 (word128ArrayBE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word256ArrayLE" $ \(xs :: [Word256]) ->
+        let ys = Exts.fromList xs :: PrimArray Word256
+         in runConcat 1 (foldMap word256LE xs)
+            ===
+            runConcat 1 (word256ArrayLE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word256ArrayBE" $ \(xs :: [Word256]) ->
+        let ys = Exts.fromList xs :: PrimArray Word256
+         in runConcat 1 (foldMap word256BE xs)
+            ===
+            runConcat 1 (word256ArrayBE ys 0 (Prelude.length xs))
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->

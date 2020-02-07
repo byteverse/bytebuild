@@ -3,6 +3,7 @@
 ## 0.3.3.0 -- 2020-??-??
 
 * Add `word64PaddedLowerHex` and `word32PaddedLowerHex`
+* Add `word256Array{LE,BE}` and `word256{LE,BE}`
 * Add `word{128,256}Padded{Lower,Upper}Hex`
 
 ## 0.3.2.0 -- 2020-01-20
