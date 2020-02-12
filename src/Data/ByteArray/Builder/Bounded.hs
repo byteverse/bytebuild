@@ -61,6 +61,7 @@ module Data.ByteArray.Builder.Bounded
   , char
     -- ** Native
   , wordPaddedDec2
+  , wordPaddedDec4
   , wordPaddedDec9
     -- ** Machine-Readable
     -- *** One
@@ -647,6 +648,22 @@ wordPaddedDec2 !w = Unsafe.construct $ \arr off -> do
   writeByteArray arr off (unsafeWordToWord8 (d1 + 48))
   writeByteArray arr (off + 1) (unsafeWordToWord8 (d2 + 48))
   pure (off + 2)
+
+-- | Encode a number less than 10000 as a decimal number, zero-padding it to
+-- two digits. For example: 0 is encoded as @0000@, 5 is encoded as @0005@,
+-- and 73 is encoded as @0073@.
+--
+-- Precondition: Argument must be less than 10000. Failure to satisfy this
+-- precondition will not result in a segfault, but the resulting bytes are
+-- undefined. The implemention uses a heuristic for division that is inaccurate
+-- for large numbers.
+wordPaddedDec4 :: Word -> Builder 4
+wordPaddedDec4 !w = Unsafe.construct $ \arr off -> do
+  putRem10
+    (putRem10 $ putRem10 $ putRem10 
+     (\_ _ _ -> pure ())
+    ) arr (off + 3) w
+  pure (off + 4)
 
 -- | Encode a number less than 1e9 as a decimal number, zero-padding it to
 -- nine digits. For example: 0 is encoded as @000000000@ and 5 is encoded as

@@ -77,6 +77,10 @@ tests = testGroup "Tests"
         Bounded.run Nat.two (Bounded.wordPaddedDec2 w)
         ===
         pack (zeroPadL 2 (show w))
+    , TQC.testProperty "wordPaddedDec4" $ TQC.forAll (TQC.choose (0,9999)) $ \w ->
+        Bounded.run Nat.constant (Bounded.wordPaddedDec4 w)
+        ===
+        pack (zeroPadL 4 (show w))
     , TQC.testProperty "wordPaddedDec9" $ TQC.forAll (TQC.choose (0,999999999)) $ \w ->
         Bounded.run Nat.constant (Bounded.wordPaddedDec9 w)
         ===
