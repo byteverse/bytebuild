@@ -3,6 +3,7 @@
 ## 0.3.4.0 -- 2020-??-??
 
 * Add `wordPaddedDec4`.
+* Add `reversedOnto` and `commitsOntoChunks`.
 
 ## 0.3.3.0 -- 2020-02-10
 

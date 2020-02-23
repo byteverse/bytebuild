@@ -18,6 +18,7 @@ module Data.ByteArray.Builder.Unsafe
   , fromEffect
     -- * Finalization
   , reverseCommitsOntoChunks
+  , commitsOntoChunks
   , copyReverseCommits
   , addCommitsLength
     -- * Safe Functions
@@ -115,7 +116,7 @@ addCommitsLength !acc (Mutable _ x cs) = addCommitsLength (acc + I# x) cs
 -- @Chunks@ list (this argument is often @ChunksNil@). This reverses
 -- the order of the chunks, which is desirable since builders assemble
 -- @Commits@ with the chunks backwards. This performs an in-place shrink
--- and freezes on any mutable byte arrays it encounters. Consequently,
+-- and freezes any mutable byte arrays it encounters. Consequently,
 -- these must not be reused.
 reverseCommitsOntoChunks :: Chunks -> Commits s -> ST s Chunks
 reverseCommitsOntoChunks !xs Initial = pure xs
@@ -128,6 +129,30 @@ reverseCommitsOntoChunks !xs (Mutable buf len cs) = case len of
     shrinkMutableByteArray (MutableByteArray buf) (I# len)
     arr <- PM.unsafeFreezeByteArray (MutableByteArray buf)
     reverseCommitsOntoChunks (ChunksCons (Bytes arr 0 (I# len)) xs) cs
+
+-- | Variant of 'reverseCommitsOntoChunks' that does not reverse
+-- the order of the commits. Since commits are built backwards by
+-- consing, this means that the chunks appended to the front will
+-- be backwards. Within each chunk, however, the bytes will be in
+-- the correct order.
+--
+-- Unlike 'reverseCommitsOntoChunks', this function is not tail
+-- recursive.
+commitsOntoChunks :: Chunks -> Commits s -> ST s Chunks
+commitsOntoChunks !xs0 cs0 = go cs0
+  where
+  go Initial = pure xs0
+  go (Immutable arr off len cs) = do
+    xs <- go cs
+    pure $! ChunksCons (Bytes (ByteArray arr) (I# off) (I# len)) xs
+  go (Mutable buf len cs) = case len of
+    -- Skip over empty byte arrays.
+    0# -> go cs
+    _ -> do
+      shrinkMutableByteArray (MutableByteArray buf) (I# len)
+      arr <- PM.unsafeFreezeByteArray (MutableByteArray buf)
+      xs <- go cs
+      pure $! ChunksCons (Bytes arr 0 (I# len)) xs
 
 -- | Copy the contents of the chunks into a mutable array, reversing
 -- the order of the chunks.

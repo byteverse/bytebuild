@@ -14,6 +14,7 @@ module Data.ByteArray.Builder
     -- * Evaluation
   , run
   , runOnto
+  , reversedOnto
   , putMany
   , putManyConsLength
     -- * Materialized Byte Sequences
@@ -113,6 +114,7 @@ import Data.ByteArray.Builder.Unsafe (Builder(Builder))
 import Data.ByteArray.Builder.Unsafe (BuilderState(BuilderState),pasteIO)
 import Data.ByteArray.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.ByteArray.Builder.Unsafe (reverseCommitsOntoChunks)
+import Data.ByteArray.Builder.Unsafe (commitsOntoChunks)
 import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
 import Data.ByteArray.Builder.Unsafe (addCommitsLength,copyReverseCommits)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
@@ -159,6 +161,20 @@ runOnto hint@(I# hint# ) (Builder f) cs0 = runST $ do
     (# s1, bufX, offX, _, csX #) ->
       (# s1, Mutable bufX offX csX #)
   reverseCommitsOntoChunks cs0 cs
+
+-- | Variant of 'runOnto' that conses the additional chunks
+-- in reverse order. 
+reversedOnto :: 
+     Int -- ^ Size of initial chunk (use 4080 if uncertain)
+  -> Builder -- ^ Builder
+  -> Chunks
+  -> Chunks
+reversedOnto hint@(I# hint# ) (Builder f) cs0 = runST $ do
+  MutableByteArray buf0 <- PM.newByteArray hint
+  cs <- ST $ \s0 -> case f buf0 0# hint# Initial s0 of
+    (# s1, bufX, offX, _, csX #) ->
+      (# s1, Mutable bufX offX csX #)
+  commitsOntoChunks cs0 cs
 
 -- | Run a builder against lots of elements. This fills the same
 -- underlying buffer over and over again. Do not let the argument to
