@@ -53,6 +53,11 @@ module Data.ByteArray.Builder
   , word8PaddedUpperHex
   , word8LowerHex
   , ascii
+  , ascii2
+  , ascii3
+  , ascii4
+  , ascii5
+  , ascii6
   , char
     -- ** Machine-Readable
     -- *** One
@@ -780,6 +785,31 @@ word8PaddedUpperHex w =
 -- Precondition: Input must be an ASCII character. This is not checked.
 ascii :: Char -> Builder
 ascii c = fromBoundedOne (Bounded.ascii c)
+
+-- | Encode two ASCII characters.
+-- Precondition: Must be an ASCII characters. This is not checked.
+ascii2 :: Char -> Char -> Builder
+ascii2 a b = fromBounded Nat.constant (Bounded.ascii2 a b)
+
+-- | Encode three ASCII characters.
+-- Precondition: Must be an ASCII characters. This is not checked.
+ascii3 :: Char -> Char -> Char -> Builder
+ascii3 a b c = fromBounded Nat.constant (Bounded.ascii3 a b c)
+
+-- | Encode four ASCII characters.
+-- Precondition: Must be an ASCII characters. This is not checked.
+ascii4 :: Char -> Char -> Char -> Char -> Builder
+ascii4 a b c d = fromBounded Nat.constant (Bounded.ascii4 a b c d)
+
+-- | Encode five ASCII characters.
+-- Precondition: Must be an ASCII characters. This is not checked.
+ascii5 :: Char -> Char -> Char -> Char -> Char -> Builder
+ascii5 a b c d e = fromBounded Nat.constant (Bounded.ascii5 a b c d e)
+
+-- | Encode five ASCII characters.
+-- Precondition: Must be an ASCII characters. This is not checked.
+ascii6 :: Char -> Char -> Char -> Char -> Char -> Char -> Builder
+ascii6 a b c d e f = fromBounded Nat.constant (Bounded.ascii6 a b c d e f)
 
 -- | Encode a UTF-8 char. This only uses as much space as is required.
 char :: Char -> Builder

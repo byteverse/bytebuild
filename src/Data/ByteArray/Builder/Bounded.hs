@@ -58,6 +58,11 @@ module Data.ByteArray.Builder.Bounded
   , word8PaddedUpperHex
   , word8LowerHex
   , ascii
+  , ascii2
+  , ascii3
+  , ascii4
+  , ascii5
+  , ascii6
   , char
     -- ** Native
   , wordPaddedDec2
@@ -696,6 +701,56 @@ ascii :: Char -> Builder 1
 ascii (C# c) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
   primitive_ (writeCharArray# arr off c)
   pure (I# (off +# 1# ))
+
+-- | Encode two ASCII characters. Precondition: Must be an ASCII characters.
+-- This is not checked.
+ascii2 :: Char -> Char -> Builder 2
+ascii2 (C# c0) (C# c1) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
+  primitive_ (writeCharArray# arr off c0)
+  primitive_ (writeCharArray# arr (off +# 1# ) c1)
+  pure (I# (off +# 2# ))
+
+-- | Encode three ASCII characters. Precondition: Must be an ASCII characters.
+-- This is not checked.
+ascii3 :: Char -> Char -> Char -> Builder 3
+ascii3 (C# c0) (C# c1) (C# c2) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
+  primitive_ (writeCharArray# arr off c0)
+  primitive_ (writeCharArray# arr (off +# 1# ) c1)
+  primitive_ (writeCharArray# arr (off +# 2# ) c2)
+  pure (I# (off +# 3# ))
+
+-- | Encode four ASCII characters. Precondition: Must be an ASCII characters.
+-- This is not checked.
+ascii4 :: Char -> Char -> Char -> Char -> Builder 4
+ascii4 (C# c0) (C# c1) (C# c2) (C# c3) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
+  primitive_ (writeCharArray# arr off c0)
+  primitive_ (writeCharArray# arr (off +# 1# ) c1)
+  primitive_ (writeCharArray# arr (off +# 2# ) c2)
+  primitive_ (writeCharArray# arr (off +# 3# ) c3)
+  pure (I# (off +# 4# ))
+
+-- | Encode five ASCII characters. Precondition: Must be an ASCII characters.
+-- This is not checked.
+ascii5 :: Char -> Char -> Char -> Char -> Char -> Builder 5
+ascii5 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
+  primitive_ (writeCharArray# arr off c0)
+  primitive_ (writeCharArray# arr (off +# 1# ) c1)
+  primitive_ (writeCharArray# arr (off +# 2# ) c2)
+  primitive_ (writeCharArray# arr (off +# 3# ) c3)
+  primitive_ (writeCharArray# arr (off +# 4# ) c4)
+  pure (I# (off +# 5# ))
+
+-- | Encode six ASCII characters. Precondition: Must be an ASCII characters.
+-- This is not checked.
+ascii6 :: Char -> Char -> Char -> Char -> Char -> Char -> Builder 6
+ascii6 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) (C# c5) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
+  primitive_ (writeCharArray# arr off c0)
+  primitive_ (writeCharArray# arr (off +# 1# ) c1)
+  primitive_ (writeCharArray# arr (off +# 2# ) c2)
+  primitive_ (writeCharArray# arr (off +# 3# ) c3)
+  primitive_ (writeCharArray# arr (off +# 4# ) c4)
+  primitive_ (writeCharArray# arr (off +# 5# ) c5)
+  pure (I# (off +# 6# ))
 
 -- | Encode a character as UTF-8. This only uses as much space as is required.
 char :: Char -> Builder 4
