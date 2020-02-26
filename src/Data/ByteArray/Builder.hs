@@ -26,6 +26,7 @@ module Data.ByteArray.Builder
   , shortTextUtf8
   , shortTextJsonString
   , cstring
+  , cstringLen
   , stringUtf8
     -- * Encode Integral Types
     -- ** Human-Readable
@@ -132,6 +133,7 @@ import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
 import Data.Text.Short (ShortText)
 import Data.WideWord (Word128,Word256)
 import Data.Word (Word64,Word32,Word16,Word8)
+import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (RealWorld,MutableByteArray#,(+#),(-#),(<#))
@@ -324,11 +326,11 @@ fromBoundedOne (UnsafeBounded.Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
    in case f buf1 off1 s1 of
         (# s2, off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
 
--- | Create a builder from an unsliced byte sequence.
+-- | Create a builder from an unsliced byte sequence. Implemented with 'bytes'.
 byteArray :: ByteArray -> Builder
 byteArray a = bytes (Bytes a 0 (PM.sizeofByteArray a))
 
--- | Create a builder from a short bytestring.
+-- | Create a builder from a short bytestring. Implemented with 'bytes'.
 shortByteString :: ShortByteString -> Builder
 shortByteString (SBS x) = bytes (Bytes a 0 (PM.sizeofByteArray a))
   where a = ByteArray x
@@ -363,6 +365,20 @@ copy (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
         (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 0# slen# s1 of
           s2 -> (# s2, buf1, slen#, newSz -# slen#, Mutable buf0 off0 cs0 #)
     _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
+      (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
+  )
+  where
+  !(I# newSz) = max (I# slen#) 4080
+
+-- | Create a builder from a C string with explicit length. The builder
+-- must be executed before the C string is freed.
+cstringLen :: CStringLen -> Builder
+cstringLen (Exts.Ptr src#, I# slen# ) = Builder
+  (\buf0 off0 len0 cs0 s0 -> case len0 <# slen# of
+    1# -> case Exts.newByteArray# newSz s0 of
+        (# s1, buf1 #) -> case Exts.copyAddrToByteArray# src# buf1 0# slen# s1 of
+          s2 -> (# s2, buf1, slen#, newSz -# slen#, Mutable buf0 off0 cs0 #)
+    _ -> let !s1 = Exts.copyAddrToByteArray# src# buf0 off0 slen# s0 in
       (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
   )
   where
