@@ -7,7 +7,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language UnboxedTuples #-}
 
-module Data.ByteArray.Builder
+module Data.Bytes.Builder
   ( -- * Bounded Primitives
     Builder
   , fromBounded
@@ -117,13 +117,13 @@ module Data.ByteArray.Builder
 import Control.Exception (SomeException,toException)
 import Control.Monad.ST (ST,runST)
 import Control.Monad.IO.Class (MonadIO,liftIO)
-import Data.ByteArray.Builder.Unsafe (Builder(Builder))
-import Data.ByteArray.Builder.Unsafe (BuilderState(BuilderState),pasteIO)
-import Data.ByteArray.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
-import Data.ByteArray.Builder.Unsafe (reverseCommitsOntoChunks)
-import Data.ByteArray.Builder.Unsafe (commitsOntoChunks)
-import Data.ByteArray.Builder.Unsafe (stringUtf8,cstring)
-import Data.ByteArray.Builder.Unsafe (addCommitsLength,copyReverseCommits)
+import Data.Bytes.Builder.Unsafe (Builder(Builder))
+import Data.Bytes.Builder.Unsafe (BuilderState(BuilderState),pasteIO)
+import Data.Bytes.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
+import Data.Bytes.Builder.Unsafe (reverseCommitsOntoChunks)
+import Data.Bytes.Builder.Unsafe (commitsOntoChunks)
+import Data.Bytes.Builder.Unsafe (stringUtf8,cstring)
+import Data.Bytes.Builder.Unsafe (addCommitsLength,copyReverseCommits)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Bytes.Chunks (Chunks(ChunksNil))
 import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
@@ -143,8 +143,8 @@ import GHC.ST (ST(ST))
 
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
-import qualified Data.ByteArray.Builder.Bounded as Bounded
-import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
+import qualified Data.Bytes.Builder.Bounded as Bounded
+import qualified Data.Bytes.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
 import qualified Data.Text.Short as TS
 import qualified GHC.Exts as Exts
@@ -231,7 +231,7 @@ putMany hint0 g xs cb = do
 putManyError :: SomeException
 {-# noinline putManyError #-}
 putManyError = toException
-  (userError "small-bytearray-builder: putMany implementation error")
+  (userError "bytebuild: putMany implementation error")
 
 -- | Variant of 'putMany' that prefixes each pushed array of chunks
 -- with the number of bytes that the chunks in each batch required.

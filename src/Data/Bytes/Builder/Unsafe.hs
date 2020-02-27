@@ -6,7 +6,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language UnboxedTuples #-}
 
-module Data.ByteArray.Builder.Unsafe
+module Data.Bytes.Builder.Unsafe
   ( -- * Types
     Builder(..)
   , BuilderState(..)
@@ -24,7 +24,7 @@ module Data.ByteArray.Builder.Unsafe
     -- * Safe Functions
     -- | These functions are actually completely safe, but they are defined
     -- here because they are used by typeclass instances. Import them from
-    -- @Data.ByteArray.Builder@ instead.
+    -- @Data.Bytes.Builder@ instead.
   , stringUtf8
   , cstring
   ) where
@@ -41,8 +41,8 @@ import GHC.Exts (RealWorld,IsString,Int#,State#)
 import GHC.ST (ST(ST))
 import GHC.IO (stToIO)
 
-import qualified Data.ByteArray.Builder.Bounded as Bounded
-import qualified Data.ByteArray.Builder.Bounded.Unsafe as UnsafeBounded
+import qualified Data.Bytes.Builder.Bounded as Bounded
+import qualified Data.Bytes.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
 import qualified GHC.Exts as Exts
 

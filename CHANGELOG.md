@@ -1,7 +1,17 @@
-# Revision history for small-bytearray-builder
+# Revision history for bytebuild
+
+Note: Prior to version 0.3.4.0, this library was named
+`small-bytearray-builder`, not `bytebuild`. The library
+`small-bytearray-builder` is now just a compatibility shim
+to ease the migration process.
 
 ## 0.3.4.0 -- 2020-??-??
 
+* Rename the library from `small-bytearray-builder` to `bytebuild`, and
+  move modules from the `Data.ByteArray` namespace to the `Data.Bytes`
+  namespace. This is not considered a breaking change since
+  `small-bytearray-builder` continues to exist as a compatibility shim,
+  reexporting the modules with their old names.
 * Add `wordPaddedDec4`.
 * Add `reversedOnto` and `commitsOntoChunks`.
 * Add `ascii(2|3|4|5|6)`.
