@@ -12,7 +12,7 @@ import Cell (Cell(..))
 import Data.Primitive (SmallArray)
 
 import qualified Data.Foldable as F
-import qualified Data.ByteArray.Builder as B
+import qualified Data.Bytes.Builder as B
 
 encodeRows :: SmallArray (SmallArray Cell) -> B.Builder
 encodeRows = F.foldr

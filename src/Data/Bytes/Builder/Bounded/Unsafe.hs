@@ -6,7 +6,7 @@
 {-# language ScopedTypeVariables #-}
 {-# language UnboxedTuples #-}
 
-module Data.ByteArray.Builder.Bounded.Unsafe
+module Data.Bytes.Builder.Bounded.Unsafe
   ( -- * Types
     Builder(..)
     -- * Construct

@@ -12,7 +12,7 @@
 
 -- | The functions in this module are explict about the maximum number
 -- of bytes they require.
-module Data.ByteArray.Builder.Bounded
+module Data.Bytes.Builder.Bounded
   ( -- * Builder
     Builder
     -- * Execute
@@ -98,7 +98,7 @@ import Control.Monad.Primitive
 import Control.Monad.ST (ST)
 import Control.Monad.ST.Run (runByteArrayST)
 import Data.Bits
-import Data.ByteArray.Builder.Bounded.Unsafe (Builder(..))
+import Data.Bytes.Builder.Bounded.Unsafe (Builder(..))
 import Data.Char (ord)
 import Data.Primitive
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
@@ -112,7 +112,7 @@ import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
 import qualified Arithmetic.Lte as Lte
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
-import qualified Data.ByteArray.Builder.Bounded.Unsafe as Unsafe
+import qualified Data.Bytes.Builder.Bounded.Unsafe as Unsafe
 import qualified Data.Primitive as PM
 
 -- | Execute the bounded builder. If the size is a constant,

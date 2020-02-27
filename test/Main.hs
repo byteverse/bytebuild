@@ -7,7 +7,7 @@
 
 import Control.Applicative (liftA2)
 import Control.Monad.ST (runST)
-import Data.ByteArray.Builder
+import Data.Bytes.Builder
 import Data.Bytes.Types (MutableBytes(MutableBytes))
 import Data.Primitive (PrimArray)
 import Data.Word
@@ -21,7 +21,7 @@ import Text.Printf (printf)
 import Test.Tasty.HUnit ((@=?))
 
 import qualified Arithmetic.Nat as Nat
-import qualified Data.ByteArray.Builder.Bounded as Bounded
+import qualified Data.Bytes.Builder.Bounded as Bounded
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy.Char8 as LB

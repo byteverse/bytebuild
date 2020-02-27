@@ -7,8 +7,8 @@ import Gauge (bgroup,bench,whnf)
 import Gauge.Main (defaultMain)
 
 import qualified Arithmetic.Nat as Nat
-import qualified Data.ByteArray.Builder as B
-import qualified Data.ByteArray.Builder.Bounded as U
+import qualified Data.Bytes.Builder as B
+import qualified Data.Bytes.Builder.Bounded as U
 
 import qualified Cell
 import qualified SimpleCsv

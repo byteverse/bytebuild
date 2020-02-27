@@ -9,7 +9,7 @@ module Word16Tree
   , expectedSmall
   ) where
 
-import Data.ByteArray.Builder as B
+import Data.Bytes.Builder as B
 import Data.Word (Word16)
 import Data.Primitive (ByteArray)
 import qualified Data.Bytes as Bytes

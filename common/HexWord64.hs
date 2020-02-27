@@ -17,7 +17,7 @@ module HexWord64
 
 import GHC.ST (ST(ST))
 import Data.Bits
-import Data.ByteArray.Builder.Bounded.Unsafe (Builder,construct)
+import Data.Bytes.Builder.Bounded.Unsafe (Builder,construct)
 import Data.Primitive
 import Data.Word
 import GHC.Exts
