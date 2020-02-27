@@ -5,7 +5,7 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
-## 0.3.4.0 -- 2020-??-??
+## 0.3.4.0 -- 2020-02-27
 
 * Rename the library from `small-bytearray-builder` to `bytebuild`, and
   move modules from the `Data.ByteArray` namespace to the `Data.Bytes`
