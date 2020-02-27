@@ -20,6 +20,7 @@ module Data.ByteArray.Builder
     -- * Materialized Byte Sequences
   , bytes
   , copy
+  , copy2
   , insert
   , byteArray
   , shortByteString
@@ -382,6 +383,25 @@ cstringLen (Exts.Ptr src#, I# slen# ) = Builder
       (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
   )
   where
+  !(I# newSz) = max (I# slen#) 4080
+
+-- | Create a builder from two byte sequences. This always results in two
+-- calls to @memcpy@. This is beneficial when the byte sequences are
+-- known to be small (less than 256 bytes).
+copy2 :: Bytes -> Bytes -> Builder
+copy2 (Bytes (ByteArray srcA# ) (I# soffA# ) (I# slenA# ))
+      (Bytes (ByteArray srcB# ) (I# soffB# ) (I# slenB# )) = Builder
+  (\buf0 off0 len0 cs0 s0 -> case len0 <# slen# of
+    1# -> case Exts.newByteArray# newSz s0 of
+        (# s1, buf1 #) -> case Exts.copyByteArray# srcA# soffA# buf1 0# slenA# s1 of
+          s2 -> case Exts.copyByteArray# srcB# soffB# buf1 slenA# slenB# s2 of
+            s3 -> (# s3, buf1, slen#, newSz -# slen#, Mutable buf0 off0 cs0 #)
+    _ -> let !s1 = Exts.copyByteArray# srcA# soffA# buf0 off0 slenA# s0
+             !s2 = Exts.copyByteArray# srcB# soffB# buf0 (off0 +# slenA# ) slenB# s1 in
+      (# s2, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
+  )
+  where
+  !slen# = slenA# +# slenB#
   !(I# newSz) = max (I# slen#) 4080
 
 -- | Create a builder from a byte sequence. This never calls @memcpy@.
