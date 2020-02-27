@@ -6,6 +6,7 @@
 * Add `reversedOnto` and `commitsOntoChunks`.
 * Add `ascii(2|3|4|5|6)`.
 * Add `cstringLen` unbounded builder.
+* Add `copy2`.
 
 ## 0.3.3.0 -- 2020-02-10
 
