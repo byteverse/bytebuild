@@ -15,13 +15,17 @@ import Data.Char (ord,chr)
 import Data.IORef (IORef,newIORef,readIORef,writeIORef)
 import Data.Primitive (ByteArray)
 import Data.WideWord (Word128(Word128),Word256(Word256))
+import Numeric.Natural (Natural)
 import Test.Tasty (defaultMain,testGroup,TestTree)
 import Test.QuickCheck ((===),Arbitrary)
+import Test.QuickCheck.Instances.Natural ()
 import Text.Printf (printf)
 import Test.Tasty.HUnit ((@=?))
 
 import qualified Arithmetic.Nat as Nat
+import qualified Data.Bits as Bits
 import qualified Data.Bytes.Builder.Bounded as Bounded
+import qualified Data.Bytes as Bytes
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy.Char8 as LB
@@ -215,6 +219,19 @@ tests = testGroup "Tests"
          in runConcat 1 (foldMap word256BE xs)
             ===
             runConcat 1 (word256ArrayBE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word64LEB128" $ \(x :: Word64) ->
+        runConcat 1 (word64LEB128 x)
+        ===
+        naiveLeb128 (fromIntegral x)
+    , TQC.testProperty "naturalDec-A" $ \(x :: Natural) ->
+        runConcat 1 (naturalDec x)
+        ===
+        pack (show x)
+    , TQC.testProperty "naturalDec-B" $ \(x :: Natural) ->
+        let y = 1234567892345678934678987654321 * x in
+        runConcat 1 (naturalDec y)
+        ===
+        pack (show y)
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->
@@ -306,3 +323,18 @@ zeroPadL :: Int -> String -> String
 zeroPadL n s
   | length s < n = replicate (n - length s) '0' ++ s
   | otherwise = s
+
+naiveLeb128 :: Natural -> ByteArray
+naiveLeb128 x =
+  Bytes.toByteArray (Bytes.unsafeDrop 1 (Exts.fromList (0xFF : go [] x)))
+  where
+  go !xs !n =
+    let (q,r) = quotRem n 128
+        r' = fromIntegral @Natural @Word8 r
+        w = if q == 0
+          then r'
+          else Bits.setBit r' 7
+        xs' = w : xs
+     in if q == 0 
+          then L.reverse xs'
+          else go xs' q

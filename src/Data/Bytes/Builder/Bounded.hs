@@ -45,6 +45,8 @@ module Data.Bytes.Builder.Bounded
     -- ** 64-bit
   , word64PaddedLowerHex
   , word64PaddedUpperHex
+    -- ** 48-bit
+  , word48PaddedLowerHex
     -- ** 32-bit
   , word32PaddedLowerHex
   , word32PaddedUpperHex
@@ -89,6 +91,9 @@ module Data.Bytes.Builder.Bounded
   , int64LE
   , int32LE
   , int16LE
+    -- **** LEB128
+  , wordLEB128
+  , word64LEB128
     -- * Encode Floating-Point Types
   , doubleDec
   ) where
@@ -161,7 +166,10 @@ infixr 9 `append`
 
 -- | Concatenate two builders.
 append :: Builder m -> Builder n -> Builder (m + n)
-append (Builder f) (Builder g) =
+append = unsafeAppend
+
+unsafeAppend :: Builder m -> Builder n -> Builder p
+unsafeAppend (Builder f) (Builder g) =
   Builder $ \arr off0 s0 -> case f arr off0 s0 of
     (# s1, r #) -> g arr r s1
 
@@ -286,15 +294,20 @@ wordCommonDec# w# = Unsafe.construct $ \arr off0 -> if w /= 0
 
 internalWordLoop :: MutableByteArray s -> Int -> Word -> ST s Int
 {-# inline internalWordLoop #-}
-internalWordLoop arr off0 x0 = go off0 x0 where
+internalWordLoop arr off0 x0 = do
+  off1 <- backwardsWordLoop arr off0 x0
+  reverseBytes arr off0 (off1 - 1)
+  pure off1
+
+backwardsWordLoop :: MutableByteArray s -> Int -> Word -> ST s Int
+{-# inline backwardsWordLoop #-}
+backwardsWordLoop arr off0 x0 = go off0 x0 where
   go !off !(x :: Word) = if x > 0
     then do
       let (y,z) = quotRem x 10
       writeByteArray arr off (fromIntegral (z + 0x30) :: Word8)
       go (off + 1) y
-    else do
-      reverseBytes arr off0 (off - 1)
-      pure off
+    else pure off
 
 -- Requires up to 20 bytes. Can be less depending on what the
 -- size of the argument is known to be. Unsafe.
@@ -390,6 +403,14 @@ word64PaddedUpperHex (W64# w) = word64PaddedUpperHex# w
 word64PaddedLowerHex :: Word64 -> Builder 16
 word64PaddedLowerHex (W64# w) = word64PaddedLowerHex# w
 
+-- | Requires exactly 12 bytes. Discards the upper 16 bits of a
+-- 64-bit unsigned integer and then encodes the lower 48 bits as
+-- hexadecimal, zero-padding the encoding to 12 digits. This uses
+-- lowercase for the alphabetical digits. For example, this encodes the
+-- number 1022 as @0000000003fe@.
+word48PaddedLowerHex :: Word64 -> Builder 12
+word48PaddedLowerHex (W64# w) = word48PaddedLowerHex# w
+
 -- | Requires exactly 8 bytes. Encodes a 32-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 8 digits. This uses
 -- uppercase for the alphabetical digits.
@@ -478,6 +499,27 @@ word64PaddedUpperHex# w# = Unsafe.construct $ \arr off -> do
   writeByteArray arr (off + 14) (toHexUpper (unsafeShiftR w 4))
   writeByteArray arr (off + 15) (toHexUpper (unsafeShiftR w 0))
   pure (off + 16)
+  where
+  w = W# w#
+
+-- TODO: Is it actually worth unrolling this loop. I suspect that it
+-- might not be. Benchmark this.
+word48PaddedLowerHex# :: Word# -> Builder 12
+{-# noinline word48PaddedLowerHex# #-}
+word48PaddedLowerHex# w# = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off (toHexLower (unsafeShiftR w 44))
+  writeByteArray arr (off + 1) (toHexLower (unsafeShiftR w 40))
+  writeByteArray arr (off + 2) (toHexLower (unsafeShiftR w 36))
+  writeByteArray arr (off + 3) (toHexLower (unsafeShiftR w 32))
+  writeByteArray arr (off + 4) (toHexLower (unsafeShiftR w 28))
+  writeByteArray arr (off + 5) (toHexLower (unsafeShiftR w 24))
+  writeByteArray arr (off + 6) (toHexLower (unsafeShiftR w 20))
+  writeByteArray arr (off + 7) (toHexLower (unsafeShiftR w 16))
+  writeByteArray arr (off + 8) (toHexLower (unsafeShiftR w 12))
+  writeByteArray arr (off + 9) (toHexLower (unsafeShiftR w 8))
+  writeByteArray arr (off + 10) (toHexLower (unsafeShiftR w 4))
+  writeByteArray arr (off + 11) (toHexLower w)
+  pure (off + 12)
   where
   w = W# w#
 
@@ -752,6 +794,22 @@ ascii6 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) (C# c5) = Unsafe.construct $ \(Mu
   primitive_ (writeCharArray# arr (off +# 5# ) c5)
   pure (I# (off +# 6# ))
 
+-- | Encode a machine-sized word with LEB-128.
+wordLEB128 :: Word -> Builder 10
+wordLEB128 (W# w) = lebCommon (W# w)
+
+-- | Encode a 64-bit word with LEB-128.
+word64LEB128 :: Word64 -> Builder 10
+word64LEB128 (W64# w) = lebCommon (W# w)
+
+lebCommon :: Word -> Builder n
+lebCommon !w = case quotRem w 128 of
+  (q,r) -> case q of
+    0 -> unsafeWord8 (unsafeWordToWord8 r)
+    _ -> unsafeAppend
+      (unsafeWord8 (unsafeWordToWord8 (r .|. 0x80)))
+      (lebCommon q)
+
 -- | Encode a character as UTF-8. This only uses as much space as is required.
 char :: Char -> Builder 4
 char c
@@ -910,6 +968,11 @@ word16BE w = Unsafe.construct $ \arr off -> do
 
 word8 :: Word8 -> Builder 1
 word8 w = Unsafe.construct $ \arr off -> do
+  writeByteArray arr off w
+  pure (off + 1)
+
+unsafeWord8 :: Word8 -> Builder n
+unsafeWord8 w = Unsafe.construct $ \arr off -> do
   writeByteArray arr off w
   pure (off + 1)
 

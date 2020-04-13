@@ -3,8 +3,10 @@
 {-# language DuplicateRecordFields #-}
 {-# language LambdaCase #-}
 {-# language MagicHash #-}
+{-# language NumericUnderscores #-}
 {-# language RankNTypes #-}
 {-# language ScopedTypeVariables #-}
+{-# language TypeApplications #-}
 {-# language UnboxedTuples #-}
 
 module Data.Bytes.Builder
@@ -36,11 +38,13 @@ module Data.Bytes.Builder
   , word16Dec
   , word8Dec
   , wordDec
+  , naturalDec
   , int64Dec
   , int32Dec
   , int16Dec
   , int8Dec
   , intDec
+  , integerDec
     -- * Unsigned Words
     -- ** 64-bit
   , word64PaddedUpperHex
@@ -82,6 +86,10 @@ module Data.Bytes.Builder
   , int64LE
   , int32LE
   , int16LE
+    -- **** LEB128
+  , intLEB128
+  , wordLEB128
+  , word64LEB128
     -- *** Many
   , word8Array
     -- **** Big Endian
@@ -117,12 +125,13 @@ module Data.Bytes.Builder
 import Control.Exception (SomeException,toException)
 import Control.Monad.ST (ST,runST)
 import Control.Monad.IO.Class (MonadIO,liftIO)
+import Data.Bits (unsafeShiftR,unsafeShiftL,xor,finiteBitSize)
 import Data.Bytes.Builder.Unsafe (Builder(Builder))
 import Data.Bytes.Builder.Unsafe (BuilderState(BuilderState),pasteIO)
 import Data.Bytes.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.Bytes.Builder.Unsafe (reverseCommitsOntoChunks)
 import Data.Bytes.Builder.Unsafe (commitsOntoChunks)
-import Data.Bytes.Builder.Unsafe (stringUtf8,cstring)
+import Data.Bytes.Builder.Unsafe (stringUtf8,cstring,fromEffect)
 import Data.Bytes.Builder.Unsafe (addCommitsLength,copyReverseCommits)
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Bytes.Chunks (Chunks(ChunksNil))
@@ -138,8 +147,13 @@ import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (RealWorld,MutableByteArray#,(+#),(-#),(<#))
+import GHC.Exts ((*#))
+import GHC.Integer.Logarithms.Compat (integerLog2#)
 import GHC.IO (IO(IO),stToIO)
+import GHC.Natural (naturalFromInteger,naturalToInteger)
 import GHC.ST (ST(ST))
+import GHC.Word (Word(W#),Word8(W8#))
+import Numeric.Natural (Natural)
 
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
@@ -909,7 +923,6 @@ word32LE w = fromBounded Nat.constant (Bounded.word32LE w)
 word16LE :: Word16 -> Builder
 word16LE w = fromBounded Nat.constant (Bounded.word16LE w)
 
-
 -- | Requires exactly 32 bytes. Dump the octets of a 256-bit
 -- word in a big-endian fashion.
 word256BE :: Word256 -> Builder
@@ -1043,3 +1056,119 @@ indexChar8Array (ByteArray b) (I# i) = C# (Exts.indexCharArray# b i)
 
 c2w :: Char -> Word8
 c2w = fromIntegral . ord
+
+-- In C, this is: (n << 1) ^ (n >> (BIT_WIDTH - 1))
+zigZagNative :: Int -> Word
+zigZagNative s = fromIntegral @Int @Word
+  ((unsafeShiftL s 1) `xor` (unsafeShiftR s (finiteBitSize (undefined :: Word) - 1)))
+
+-- | Encode a signed machine-sized integer with LEB-128. This uses
+-- zig-zag encoding.
+intLEB128 :: Int -> Builder
+intLEB128 = wordLEB128 . zigZagNative
+
+-- | Encode a machine-sized word with LEB-128.
+wordLEB128 :: Word -> Builder
+wordLEB128 w = fromBounded Nat.constant (Bounded.wordLEB128 w)
+
+-- | Encode a 64-bit word with LEB-128.
+word64LEB128 :: Word64 -> Builder
+word64LEB128 w = fromBounded Nat.constant (Bounded.word64LEB128 w)
+
+-- | Encode a signed arbitrary-precision integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+-- Negative numbers are preceded by a minus sign. Positive numbers
+-- are not preceded by anything.
+integerDec :: Integer -> Builder
+integerDec !i
+  | i < 0 = ascii '-' <> naturalDec (naturalFromInteger (negate i))
+  | otherwise = naturalDec (naturalFromInteger i)
+
+-- | Encodes an unsigned arbitrary-precision integer as decimal.
+-- This encoding never starts with a zero unless the argument was zero.
+naturalDec :: Natural -> Builder
+naturalDec !n0 = fromEffect
+  (I# (11# +# (3# *# integerLog2# (naturalToInteger n0))))
+  (\marr off -> case n0 of
+    0 -> do
+      PM.writeByteArray marr off (0x30 :: Word8)
+      pure (off + 1)
+    _ -> go n0 marr off off
+  )
+  where
+  go :: forall s. Natural -> MutableByteArray s -> Int -> Int -> ST s Int
+  go !n !buf !off0 !off = case quotRem n 1_000_000_000 of
+    (q,r) -> case q of
+      0 -> do
+        off' <- backwardsWordLoop buf off (fromIntegral @Natural @Word r)
+        reverseBytes buf off0 (off' - 1)
+        pure off'
+      _ -> do
+        off' <- backwardsPasteWordPaddedDec9
+          (fromIntegral @Natural @Word r) buf off
+        go q buf off0 off'
+
+-- Reverse the bytes in the designated slice. This takes
+-- an inclusive start offset and an inclusive end offset.
+reverseBytes :: MutableByteArray s -> Int -> Int -> ST s ()
+{-# inline reverseBytes #-}
+reverseBytes arr begin end = go begin end where
+  go ixA ixB = if ixA < ixB
+    then do
+      a :: Word8 <- PM.readByteArray arr ixA
+      b :: Word8 <- PM.readByteArray arr ixB
+      PM.writeByteArray arr ixA b
+      PM.writeByteArray arr ixB a
+      go (ixA + 1) (ixB - 1)
+    else pure ()
+
+backwardsPasteWordPaddedDec9 ::
+  Word -> MutableByteArray s -> Int -> ST s Int
+backwardsPasteWordPaddedDec9 !w !arr !off = do
+  backwardsPutRem10
+    (backwardsPutRem10 $ backwardsPutRem10 $ backwardsPutRem10 $
+     backwardsPutRem10 $ backwardsPutRem10 $ backwardsPutRem10 $
+     backwardsPutRem10 $ backwardsPutRem10
+     (\_ _ _ -> pure ())
+    ) arr off w
+  pure (off + 9)
+
+backwardsPutRem10 ::
+     (MutableByteArray s -> Int -> Word -> ST s a)
+  -> MutableByteArray s -> Int -> Word -> ST s a
+{-# inline backwardsPutRem10 #-}
+backwardsPutRem10 andThen arr off dividend = do
+  let quotient = approxDiv10 dividend
+      remainder = dividend - (10 * quotient)
+  PM.writeByteArray arr off (unsafeWordToWord8 (remainder + 48))
+  andThen arr (off + 1) quotient
+
+backwardsWordLoop :: MutableByteArray s -> Int -> Word -> ST s Int
+{-# inline backwardsWordLoop #-}
+backwardsWordLoop arr off0 x0 = go off0 x0 where
+  go !off !(x :: Word) = if x > 0
+    then do
+      let (y,z) = quotRem x 10
+      PM.writeByteArray arr off (fromIntegral (z + 0x30) :: Word8)
+      go (off + 1) y
+    else pure off
+
+-- Based on C code from https://stackoverflow.com/a/5558614
+-- For numbers less than 1073741829, this gives a correct answer.
+approxDiv10 :: Word -> Word
+approxDiv10 !n = unsafeShiftR (0x1999999A * n) 32
+  
+-- -- A weird beast useful for rewrite rules. Not yet used. This will
+-- -- ultimately replace fromEffect and fromBounded.
+-- require :: Int -> Builder
+-- require !n = Builder $ \buf0 off0 len0 cs0 s0 ->
+--   let !(I# req) = n
+--    in case len0 >=# req of
+--         1# -> (# s0, buf0, off0, len0, cs0 #)
+--         _ -> let !(I# lenX) = max 4080 (I# req) in
+--           case Exts.newByteArray# lenX s0 of
+--             (# sX, bufX #) ->
+--               (# sX, bufX, 0#, lenX, Mutable buf0 off0 cs0 #)
+
+unsafeWordToWord8 :: Word -> Word8
+unsafeWordToWord8 (W# w) = W8# w
