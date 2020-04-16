@@ -126,7 +126,7 @@ import Control.Exception (SomeException,toException)
 import Control.Monad.ST (ST,runST)
 import Control.Monad.IO.Class (MonadIO,liftIO)
 import Data.Bits (unsafeShiftR,unsafeShiftL,xor,finiteBitSize)
-import Data.Bytes.Builder.Unsafe (Builder(Builder))
+import Data.Bytes.Builder.Unsafe (Builder(Builder),commitDistance1)
 import Data.Bytes.Builder.Unsafe (BuilderState(BuilderState),pasteIO)
 import Data.Bytes.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.Bytes.Builder.Unsafe (reverseCommitsOntoChunks)
@@ -146,7 +146,7 @@ import Data.Word (Word64,Word32,Word16,Word8)
 import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
-import GHC.Exts (RealWorld,MutableByteArray#,(+#),(-#),(<#))
+import GHC.Exts (RealWorld,(+#),(-#),(<#))
 import GHC.Exts ((*#))
 import GHC.Integer.Logarithms.Compat (integerLog2#)
 import GHC.IO (IO(IO),stToIO)
@@ -1003,29 +1003,6 @@ consLength32BE = consLength Nat.constant (\x -> Bounded.word32BE (fromIntegral x
 -- presented as a big-endian 64-bit word. See 'consLength32BE'.
 consLength64BE :: Builder -> Builder
 consLength64BE = consLength Nat.constant (\x -> Bounded.word64BE (fromIntegral x))
-
--- Internal. This is like commitDistance, but you get to supply a
--- head of the commit list that has not yet been committed.
-commitDistance1 ::
-     MutableByteArray# s -- target
-  -> Int# -- offset into target
-  -> MutableByteArray# s -- head of array
-  -> Int# -- offset into head of array
-  -> Commits s
-  -> Int#
-commitDistance1 target offTarget buf0 offBuf cs =
-  case Exts.sameMutableByteArray# target buf0 of
-    1# -> offBuf -# offTarget
-    _ -> commitDistance target offBuf cs -# offTarget
-
-commitDistance :: MutableByteArray# s -> Int# -> Commits s -> Int#
-commitDistance _ !_ Initial = error "chunkDistance: chunk not found"
-commitDistance target !n (Immutable _ _ len cs) =
-  commitDistance target (n +# len) cs
-commitDistance target !n (Mutable buf len cs) =
-  case Exts.sameMutableByteArray# target buf of
-    1# -> n +# len
-    _ -> commitDistance target (n +# len) cs
 
 -- | Push the buffer currently being filled onto the chunk list,
 -- allocating a new active buffer of the requested size. This is

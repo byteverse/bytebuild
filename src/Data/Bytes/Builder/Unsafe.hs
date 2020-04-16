@@ -16,11 +16,17 @@ module Data.Bytes.Builder.Unsafe
   , pasteIO
     -- * Construction
   , fromEffect
+    -- * Builder State
+  , newBuilderState
+  , closeBuilderState
     -- * Finalization
   , reverseCommitsOntoChunks
   , commitsOntoChunks
   , copyReverseCommits
   , addCommitsLength
+    -- * Commit Distance
+  , commitDistance
+  , commitDistance1
     -- * Safe Functions
     -- | These functions are actually completely safe, but they are defined
     -- here because they are used by typeclass instances. Import them from
@@ -58,11 +64,28 @@ newtype Builder
       (# State# s, MutableByteArray# s, Int#, Int#, Commits s #) -- all the same things
     )
 
+-- | A list of committed chunks along with the chunk currently being
+-- written to. This is kind of like a non-empty variant of 'Commmits'
+-- but with the additional invariant that the head chunk is a mutable
+-- byte array.
 data BuilderState s = BuilderState
   (MutableByteArray# s) -- buffer we are currently writing to
   Int# -- offset into the current buffer
   Int# -- number of bytes remaining in the current buffer
   !(Commits s) -- buffers and immutable byte slices that are already committed
+
+-- | Create an empty 'BuilderState' with a buffer of the given size.
+newBuilderState :: Int -> ST s (BuilderState s)
+{-# inline newBuilderState #-}
+newBuilderState n@(I# n# ) = do
+  MutableByteArray buf <- PM.newByteArray n
+  pure (BuilderState buf 0# n# Initial)
+
+-- | Push the active chunk onto the top of the commits.
+-- The @BuilderState@ argument must not be reused after being passed
+-- to this function. That is, its use must be affine.
+closeBuilderState :: BuilderState s -> Commits s
+closeBuilderState (BuilderState dst off _ cmts) = Mutable dst off cmts
 
 -- | Run a builder, performing an in-place update on the state.
 -- The @BuilderState@ argument must not be reused after being passed
@@ -258,3 +281,30 @@ unST (ST f) = f
 shrinkMutableByteArray :: MutableByteArray s -> Int -> ST s ()
 shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
   primitive_ (Exts.shrinkMutableByteArray# arr sz)
+
+-- | Variant of commitDistance where you get to supply a
+-- head of the commit list that has not yet been committed.
+commitDistance1 ::
+     MutableByteArray# s -- target
+  -> Int# -- offset into target
+  -> MutableByteArray# s -- head of array
+  -> Int# -- offset into head of array
+  -> Commits s
+  -> Int#
+commitDistance1 target offTarget buf0 offBuf cs =
+  case Exts.sameMutableByteArray# target buf0 of
+    1# -> offBuf -# offTarget
+    _ -> commitDistance target offBuf cs -# offTarget
+
+-- | Compute the number of bytes between the last byte and the offset
+-- specified in a chunk. Precondition: the chunk must exist in the
+-- list of committed chunks. This relies on mutable byte arrays having
+-- identity (e.g. it uses @sameMutableByteArray#@).
+commitDistance :: MutableByteArray# s -> Int# -> Commits s -> Int#
+commitDistance !_ !_ Initial = errorWithoutStackTrace "chunkDistance: chunk not found"
+commitDistance target !n (Immutable _ _ len cs) =
+  commitDistance target (n +# len) cs
+commitDistance target !n (Mutable buf len cs) =
+  case Exts.sameMutableByteArray# target buf of
+    1# -> n +# len
+    _ -> commitDistance target (n +# len) cs

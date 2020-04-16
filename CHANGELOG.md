@@ -10,6 +10,8 @@ to ease the migration process.
 * Add `wordLEB128` and `word64LEB128`.
 * Add `integerDec` and `naturalDec`.
 * Add `word48PaddedLowerHex`.
+* Add `newBuilderState`, `closeBuilderState`, `commitDistance`, and
+  `commitDistance1` to the unsafe module.
 
 ## 0.3.4.0 -- 2020-02-27
 
