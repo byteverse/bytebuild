@@ -5,7 +5,7 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
-## 0.3.5.0 -- 2020-??-??
+## 0.3.5.0 -- 2020-05-01
 
 * Add `wordLEB128` and `word64LEB128`.
 * Add `integerDec` and `naturalDec`.
