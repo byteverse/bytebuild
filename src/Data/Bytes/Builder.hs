@@ -118,9 +118,13 @@ module Data.Bytes.Builder
     -- * Encode Floating-Point Types
     -- ** Human-Readable
   , doubleDec
+    -- * Replication
+  , replicate
     -- * Control
   , flush
   ) where
+
+import Prelude hiding (replicate)
 
 import Control.Exception (SomeException,toException)
 import Control.Monad.ST (ST,runST)
@@ -1129,6 +1133,17 @@ backwardsWordLoop arr off0 x0 = go off0 x0 where
       PM.writeByteArray arr off (fromIntegral (z + 0x30) :: Word8)
       go (off + 1) y
     else pure off
+
+-- | Replicate a byte the given number of times.
+replicate ::
+     Int -- ^ Number of times to replicate the byte
+  -> Word8 -- ^ Byte to replicate
+  -> Builder
+replicate !len !w = fromEffect len
+  (\marr off -> do
+    PM.setByteArray marr off len w
+    pure (off + len)
+  )
 
 -- Based on C code from https://stackoverflow.com/a/5558614
 -- For numbers less than 1073741829, this gives a correct answer.
