@@ -105,7 +105,8 @@ import Control.Monad.ST.Run (runByteArrayST)
 import Data.Bits
 import Data.Bytes.Builder.Bounded.Unsafe (Builder(..))
 import Data.Char (ord)
-import Data.Primitive
+import Data.Primitive (MutableByteArray(..),ByteArray,writeByteArray)
+import Data.Primitive (readByteArray,newByteArray,unsafeFreezeByteArray)
 import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.WideWord (Word128(Word128),Word256(Word256))
 import GHC.Exts
