@@ -99,7 +99,7 @@ module Data.Bytes.Builder.Bounded
   ) where
 
 import Arithmetic.Types (type (<=), type (:=:))
-import Control.Monad.Primitive
+import Control.Monad.Primitive (primitive_)
 import Control.Monad.ST (ST)
 import Control.Monad.ST.Run (runByteArrayST)
 import Data.Bits
