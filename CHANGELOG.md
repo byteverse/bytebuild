@@ -5,9 +5,10 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
-## 0.3.6.0 -- 2020-??-??
+## 0.3.6.0 -- 2020-06-30
 
 * Add `replicate`.
+* Fix compatibility with `primitive-0.7.1.0`.
 
 ## 0.3.5.0 -- 2020-05-01
 
