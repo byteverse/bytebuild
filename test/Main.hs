@@ -5,6 +5,8 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+import Prelude hiding (replicate)
+
 import Control.Applicative (liftA2)
 import Control.Monad.ST (runST)
 import Data.Bytes.Builder
@@ -35,6 +37,7 @@ import qualified Data.Primitive as PM
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified GHC.Exts as Exts
+import qualified Prelude
 import qualified Test.Tasty.HUnit as THU
 import qualified Test.Tasty.QuickCheck as TQC
 
@@ -321,7 +324,7 @@ instance Arbitrary Word256 where
 
 zeroPadL :: Int -> String -> String
 zeroPadL n s
-  | length s < n = replicate (n - length s) '0' ++ s
+  | length s < n = Prelude.replicate (n - length s) '0' ++ s
   | otherwise = s
 
 naiveLeb128 :: Natural -> ByteArray
