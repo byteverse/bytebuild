@@ -65,6 +65,8 @@ module Data.Bytes.Builder.Bounded
   , ascii4
   , ascii5
   , ascii6
+  , ascii7
+  , ascii8
   , char
     -- ** Native
   , wordPaddedDec2
@@ -794,6 +796,33 @@ ascii6 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) (C# c5) = Unsafe.construct $ \(Mu
   primitive_ (writeCharArray# arr (off +# 4# ) c4)
   primitive_ (writeCharArray# arr (off +# 5# ) c5)
   pure (I# (off +# 6# ))
+
+-- | Encode seven ASCII characters. Precondition: Must be an ASCII characters.
+-- This is not checked.
+ascii7 :: Char -> Char -> Char -> Char -> Char -> Char -> Char -> Builder 7
+ascii7 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) (C# c5) (C# c6) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
+  primitive_ (writeCharArray# arr off c0)
+  primitive_ (writeCharArray# arr (off +# 1# ) c1)
+  primitive_ (writeCharArray# arr (off +# 2# ) c2)
+  primitive_ (writeCharArray# arr (off +# 3# ) c3)
+  primitive_ (writeCharArray# arr (off +# 4# ) c4)
+  primitive_ (writeCharArray# arr (off +# 5# ) c5)
+  primitive_ (writeCharArray# arr (off +# 6# ) c6)
+  pure (I# (off +# 7# ))
+
+-- | Encode eight ASCII characters. Precondition: Must be an ASCII characters.
+-- This is not checked.
+ascii8 :: Char -> Char -> Char -> Char -> Char -> Char -> Char -> Char -> Builder 8
+ascii8 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) (C# c5) (C# c6) (C# c7) = Unsafe.construct $ \(MutableByteArray arr) (I# off) -> do
+  primitive_ (writeCharArray# arr off c0)
+  primitive_ (writeCharArray# arr (off +# 1# ) c1)
+  primitive_ (writeCharArray# arr (off +# 2# ) c2)
+  primitive_ (writeCharArray# arr (off +# 3# ) c3)
+  primitive_ (writeCharArray# arr (off +# 4# ) c4)
+  primitive_ (writeCharArray# arr (off +# 5# ) c5)
+  primitive_ (writeCharArray# arr (off +# 6# ) c6)
+  primitive_ (writeCharArray# arr (off +# 7# ) c7)
+  pure (I# (off +# 8# ))
 
 -- | Encode a machine-sized word with LEB-128.
 wordLEB128 :: Word -> Builder 10

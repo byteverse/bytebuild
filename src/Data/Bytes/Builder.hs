@@ -64,6 +64,8 @@ module Data.Bytes.Builder
   , ascii4
   , ascii5
   , ascii6
+  , ascii7
+  , ascii8
   , char
     -- ** Machine-Readable
     -- *** One
@@ -860,10 +862,20 @@ ascii4 a b c d = fromBounded Nat.constant (Bounded.ascii4 a b c d)
 ascii5 :: Char -> Char -> Char -> Char -> Char -> Builder
 ascii5 a b c d e = fromBounded Nat.constant (Bounded.ascii5 a b c d e)
 
--- | Encode five ASCII characters.
+-- | Encode six ASCII characters.
 -- Precondition: Must be an ASCII characters. This is not checked.
 ascii6 :: Char -> Char -> Char -> Char -> Char -> Char -> Builder
 ascii6 a b c d e f = fromBounded Nat.constant (Bounded.ascii6 a b c d e f)
+
+-- | Encode seven ASCII characters.
+-- Precondition: Must be an ASCII characters. This is not checked.
+ascii7 :: Char -> Char -> Char -> Char -> Char -> Char -> Char -> Builder
+ascii7 a b c d e f g = fromBounded Nat.constant (Bounded.ascii7 a b c d e f g)
+
+-- | Encode eight ASCII characters.
+-- Precondition: Must be an ASCII characters. This is not checked.
+ascii8 :: Char -> Char -> Char -> Char -> Char -> Char -> Char -> Char -> Builder
+ascii8 a b c d e f g h = fromBounded Nat.constant (Bounded.ascii8 a b c d e f g h)
 
 -- | Encode a UTF-8 char. This only uses as much space as is required.
 char :: Char -> Builder
