@@ -651,17 +651,18 @@ slicedUtf8TextJson !src# !soff0# !slen0# = fromFunction reqLen $ \dst doff0 -> d
         then case indexChar8Array (ByteArray src#) soff of
           '\\' -> write2 dst doff '\\' '\\' *> go (soff + 1) (slen - 1) (doff + 2)
           '\"' -> write2 dst doff '\\' '\"' *> go (soff + 1) (slen - 1) (doff + 2)
-          '\n' -> write2 dst doff '\\' 'n' *> go (soff + 1) (slen - 1) (doff + 2)
-          '\r' -> write2 dst doff '\\' 'r' *> go (soff + 1) (slen - 1) (doff + 2)
-          '\t' -> write2 dst doff '\\' 't' *> go (soff + 1) (slen - 1) (doff + 2)
           c -> if c >= '\x20'
             then PM.writeByteArray dst doff (c2w c) *> go (soff + 1) (slen - 1) (doff + 1)
-            else do
-              write2 dst doff '\\' 'u'
-              doff' <- UnsafeBounded.pasteST
-                (Bounded.word16PaddedUpperHex (fromIntegral (c2w c)))
-                dst (doff + 2)
-              go (soff + 1) (slen - 1) doff'
+            else case c of
+              '\n' -> write2 dst doff '\\' 'n' *> go (soff + 1) (slen - 1) (doff + 2)
+              '\r' -> write2 dst doff '\\' 'r' *> go (soff + 1) (slen - 1) (doff + 2)
+              '\t' -> write2 dst doff '\\' 't' *> go (soff + 1) (slen - 1) (doff + 2)
+              _ -> do
+                write2 dst doff '\\' 'u'
+                doff' <- UnsafeBounded.pasteST
+                  (Bounded.word16PaddedUpperHex (fromIntegral (c2w c)))
+                  dst (doff + 2)
+                go (soff + 1) (slen - 1) doff'
         else pure doff
   doffRes <- go (I# soff0#) (I# slen0#) (doff0 + 1)
   PM.writeByteArray dst doffRes (c2w '"')
