@@ -5,10 +5,11 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
-## 0.3.7.0 -- 2020-??-??
+## 0.3.7.0 -- 2020-11-06
 
 * Fix build error in test suite.
 * Add `ascii7` and `ascii8`.
+* Performance tweak for json string escape builder.
 
 ## 0.3.6.0 -- 2020-06-30
 
