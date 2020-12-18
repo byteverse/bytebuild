@@ -5,9 +5,10 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
-## 0.3.7.1 -- 2020-??-??
+## 0.3.8.0 -- 2020-??-??
 
 * Fix `doubleDec`, which was encoding small numbers incorrectly.
+* Add `runByteString` for producing `ByteString` from bounded builders.
 
 ## 0.3.7.0 -- 2020-11-06
 

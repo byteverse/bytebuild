@@ -18,6 +18,7 @@ module Data.Bytes.Builder.Bounded
     Builder
     -- * Execute
   , run
+  , runByteString
   , pasteGrowST
     -- * Combine
   , empty
@@ -104,9 +105,10 @@ module Data.Bytes.Builder.Bounded
 import Arithmetic.Types (type (<=), type (:=:))
 import Control.Monad.Primitive (primitive_)
 import Control.Monad.ST (ST)
-import Control.Monad.ST.Run (runByteArrayST)
+import Control.Monad.ST.Run (runByteArrayST,runIntByteArrayST)
 import Data.Bits
 import Data.Bytes.Builder.Bounded.Unsafe (Builder(..))
+import Data.ByteString (ByteString)
 import Data.Char (ord)
 import Data.Primitive (MutableByteArray(..),ByteArray,writeByteArray)
 import Data.Primitive (readByteArray,newByteArray,unsafeFreezeByteArray)
@@ -118,10 +120,12 @@ import GHC.IO (unsafeIOToST)
 import GHC.ST (ST(ST))
 import GHC.TypeLits (type (+))
 import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
+import Data.Bytes.Types (Bytes(Bytes))
 
 import qualified Arithmetic.Lte as Lte
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
+import qualified Data.Bytes as Bytes
 import qualified Data.Bytes.Builder.Bounded.Unsafe as Unsafe
 import qualified Data.Primitive as PM
 
@@ -138,6 +142,22 @@ run n b = runByteArrayST $ do
   len <- Unsafe.pasteST b arr 0
   shrinkMutableByteArray arr len
   unsafeFreezeByteArray arr
+
+-- | Variant of 'run' that puts the result in a pinned buffer and
+-- packs it up in a 'ByteString'.
+runByteString ::
+     Arithmetic.Nat n
+  -> Builder n -- ^ Builder
+  -> ByteString
+{-# inline runByteString #-}
+runByteString n b =
+  let (finalLen,r) = runIntByteArrayST $ do
+        arr <- PM.newPinnedByteArray (Nat.demote n)
+        len <- Unsafe.pasteST b arr 0
+        shrinkMutableByteArray arr len
+        arr' <- unsafeFreezeByteArray arr
+        pure (len,arr')
+   in Bytes.pinnedToByteString (Bytes r 0 finalLen)
 
 -- | Paste the builder into the byte array starting at offset zero.
 -- This reallocates the byte array if it cannot accomodate the builder,
