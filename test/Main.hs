@@ -1,4 +1,5 @@
 {-# language BangPatterns #-}
+{-# language NumericUnderscores #-}
 {-# language ScopedTypeVariables #-}
 {-# language TypeApplications #-}
 {-# language OverloadedStrings #-}
@@ -141,6 +142,8 @@ tests = testGroup "Tests"
         pack ("999999999") @=? runConcat 1 (doubleDec 999999999)
     , THU.testCase "doubleDec-K" $
         pack ("-99999999") @=? runConcat 1 (doubleDec (-99999999))
+    , THU.testCase "doubleDec-L" $
+        AsciiByteArray (pack ("6.66666666666666e-12")) @=? AsciiByteArray (runConcat 1 (doubleDec (2 / 300_000_000_000)))
     , THU.testCase "shortTextJsonString-A" $
         pack ("\"hello\"") @=? runConcat 1 (shortTextJsonString "hello")
     , THU.testCase "shortTextJsonString-B" $
@@ -315,6 +318,15 @@ runConcat n = Chunks.concatU . run n
 
 c2w :: Char -> Word8
 c2w = fromIntegral . ord
+
+-- Just a wrapper with a show instance that displays as ascii when possible.
+newtype AsciiByteArray = AsciiByteArray ByteArray
+  deriving (Eq)
+
+instance Show AsciiByteArray where
+  show (AsciiByteArray b) = if Bytes.all (\w -> w >= 32 && w < 127) (Bytes.fromByteArray b)
+    then Bytes.toLatinString (Bytes.fromByteArray b)
+    else show (show b)
 
 instance Arbitrary Word128 where
   arbitrary = liftA2 Word128 TQC.arbitrary TQC.arbitrary

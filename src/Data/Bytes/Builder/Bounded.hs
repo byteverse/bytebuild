@@ -9,6 +9,7 @@
 {-# language TypeApplications #-}
 {-# language TypeOperators #-}
 {-# language UnboxedTuples #-}
+{-# language UnliftedFFITypes #-}
 
 -- | The functions in this module are explict about the maximum number
 -- of bytes they require.
@@ -113,6 +114,7 @@ import Data.Primitive.ByteArray.Offset (MutableByteArrayOffset(..))
 import Data.WideWord (Word128(Word128),Word256(Word256))
 import GHC.Exts
 import GHC.Int (Int64(I64#),Int32(I32#),Int16(I16#),Int8(I8#))
+import GHC.IO (unsafeIOToST)
 import GHC.ST (ST(ST))
 import GHC.TypeLits (type (+))
 import GHC.Word (Word8(W8#),Word16(W16#),Word32(W32#),Word64(W64#))
@@ -1032,100 +1034,12 @@ shrinkMutableByteArray (MutableByteArray arr) (I# sz) =
 -- inaccurate. This is very visible when encoding a number like 2.25, which
 -- is perfectly represented as an IEEE 754 floating point number but is goofed
 -- up by this function.
--- If you modify this function, please take a took at the resulting core.
--- It currently performs no boxing at all, and it would be nice to keep
--- it that way.
 doubleDec# :: forall s.
   Double# -> MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
-{-# noinline doubleDec# #-}
-doubleDec# d# marr# off# s0 = unIntST s0 $ do
-  let marr = MutableByteArray marr#
-  let d0 = D# d#
-  let off0 = I# off#
-  if d0 == 0
-    then do
-      writeByteArray marr off0 (c2w '0')
-      pure (off0 + 1)
-    else do
-      let neg = d0 < 0
-      off1 <- if neg
-        then do
-          writeByteArray marr off0 (c2w '-')
-          pure (off0 + 1)
-        else pure off0
-      let d1 = abs d0
-      let mag0 = floor (logBase10 d1) :: Int
-      let useExp = (mag0 >= 14 || (neg && mag0 >= 9) || mag0 <= (-9))
-      -- This straightforward adaptation of the C code is awkward
-      -- in Haskell. Binding the triple where mag1 might not even
-      -- get used is strange.
-      let !(!d2,!mag1,!mag0A) = if useExp
-            then
-              let mag0' = if mag0 < 0 then mag0 - 1 else mag0
-               in (d1 / (10.0 ** fromIntegral @Int @Double mag0'), mag0', 0)
-            else (d1,0,mag0)
-      let mag0B = if mag0A < 1 then 0 else mag0A
-      let goNum :: Double -> Int -> Int -> ST s Int
-          goNum !dA0 !mag !offA0 = if (dA0 > doublePrecision || mag >= 0)
-            then do
-              let weight = 10.0 ** (fromIntegral @Int @Double mag)
-              -- We should actually check weight with isinf here,
-              -- but we do not.
-              (dA1,offA1) <- if weight > 0
-                then do
-                  -- TODO: use a better floor function
-                  let digit = ((floor :: Double -> Int) (dA0 / weight))
-                  let discard = fromIntegral @Int @Double digit * weight
-                  writeByteArray marr offA0
-                    (fromIntegral @Int @Word8 (digit + ord '0'))
-                  pure (dA0 - discard,offA0 + 1)
-                else pure (dA0,offA0)
-              offA2 <- if mag == 0 && dA1 > 0
-                then do
-                  writeByteArray marr offA1 (c2w '.')
-                  pure (offA1 + 1)
-                else pure offA1
-              goNum dA1 (mag - 1) offA2
-            else pure offA0
-      !off2 <- goNum d2 mag0B off1
-      off3 <- if useExp
-        then do
-          writeByteArray marr off2 (c2w 'e')
-          !mag2 <- if mag1 > 0
-            then do
-              writeByteArray marr (off2 + 1) (c2w '+')
-              pure mag1
-            else do
-              writeByteArray marr (off2 + 1) (c2w '-')
-              pure (-mag1)
-          let goMag !mag !off = if mag > 0
-                then do
-                  let (q,r) = quotRem mag 10
-                  writeByteArray marr off (fromIntegral @Int @Word8 (ord '0' + r))
-                  goMag q (off + 1)
-                else pure off
-          !off3 <- goMag mag2 (off2 + 2)
-          reverseBytes marr (off2 + 2) (off3 - 1)
-          pure off3
-        else pure off2
-      pure off3
-
-doublePrecision :: Double
-doublePrecision = 0.00000000000001
-
-unIntST :: State# s -> ST s Int -> (# State# s, Int# #)
-{-# inline unIntST #-}
-unIntST s0 (ST f) = case f s0 of
-  (# s1, I# i #) -> (# s1, i #)
-
--- This is slightly inaccurate. I think this can actually cause
--- problems in some situations. The log10 function from C would
--- be better. The inaccuracy here cause the logarithm to be slightly
--- larger than it should be. There might actually be a simple way to
--- fix this by just using recursion to compute it. We just floor the
--- result anyway. Hmm...
-logBase10 :: Double -> Double
-logBase10 d = log d / 2.30258509299
+doubleDec# d# marr# off# s0 =
+  case unsafeIOToST (c_paste_double marr# off# d#) of
+    ST f -> case f s0 of
+      (# s1, I# r #) -> (# s1, r #)
 
 -- Based on C code from https://stackoverflow.com/a/5558614
 -- For numbers less than 1073741829, this gives a correct answer.
@@ -1134,3 +1048,7 @@ approxDiv10 !n = unsafeShiftR (0x1999999A * n) 32
 
 unsafeWordToWord8 :: Word -> Word8
 unsafeWordToWord8 (W# w) = W8# w
+
+foreign import ccall unsafe "bytebuild_paste_double" c_paste_double ::
+  MutableByteArray# s -> Int# -> Double# -> IO Int
+
