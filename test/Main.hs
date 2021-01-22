@@ -129,7 +129,7 @@ tests = testGroup "Tests"
     , THU.testCase "doubleDec-D" $
         pack ("-42") @=? runConcat 1 (doubleDec (-42))
     , THU.testCase "doubleDec-E" $
-        pack ("-8.88888888888888e+14") @=? runConcat 1 (doubleDec (-888888888888888.8888888))
+        AsciiByteArray (pack ("-8.8888888888889e+14")) @=? AsciiByteArray (runConcat 1 (doubleDec (-888888888888888.8888888)))
     , THU.testCase "doubleDec-F" $
         pack ("42") @=? runConcat 1 (doubleDec 42)
     , THU.testCase "doubleDec-G" $
@@ -143,7 +143,17 @@ tests = testGroup "Tests"
     , THU.testCase "doubleDec-K" $
         pack ("-99999999") @=? runConcat 1 (doubleDec (-99999999))
     , THU.testCase "doubleDec-L" $
-        AsciiByteArray (pack ("6.66666666666666e-12")) @=? AsciiByteArray (runConcat 1 (doubleDec (2 / 300_000_000_000)))
+        AsciiByteArray (pack ("6.6666666666667e-12")) @=? AsciiByteArray (runConcat 1 (doubleDec (2 / 300_000_000_000)))
+    , THU.testCase "doubleDec-M" $
+        AsciiByteArray (pack ("6.6666666666667e-10")) @=? AsciiByteArray (runConcat 1 (doubleDec 6.666666666666667e-10))
+    , THU.testCase "doubleDec-N" $
+        AsciiByteArray (pack ("5e-10")) @=? AsciiByteArray (runConcat 1 (doubleDec 5.0e-10))
+    , THU.testCase "doubleDec-O" $
+        AsciiByteArray (pack ("1.6666666666667e-10")) @=? AsciiByteArray (runConcat 1 (doubleDec 1.6666666666666669e-10))
+    , THU.testCase "doubleDec-P" $
+        AsciiByteArray (pack ("1e-09")) @=? AsciiByteArray (runConcat 1 (doubleDec 1.0e-9))
+    , THU.testCase "doubleDec-Q" $
+        AsciiByteArray (pack ("1e-08")) @=? AsciiByteArray (runConcat 1 (doubleDec 1.0e-8))
     , THU.testCase "shortTextJsonString-A" $
         pack ("\"hello\"") @=? runConcat 1 (shortTextJsonString "hello")
     , THU.testCase "shortTextJsonString-B" $
