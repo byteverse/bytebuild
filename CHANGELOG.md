@@ -9,6 +9,7 @@ to ease the migration process.
 
 * Fix `doubleDec`, which was encoding small numbers incorrectly.
 * Add `runByteString` for producing `ByteString` from bounded builders.
+* Correct the required length calculation for json string encoding.
 
 ## 0.3.7.0 -- 2020-11-06
 

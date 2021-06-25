@@ -669,7 +669,9 @@ slicedUtf8TextJson !src# !soff0# !slen0# = fromFunction reqLen $ \dst doff0 -> d
   pure (doffRes + 1)
   where
   slen0 = I# slen0#
-  reqLen = (2 * slen0) + 2
+  -- We multiply by 6 because, in the worst case, everything might be in the
+  -- unprintable ASCII range. The plus 2 is for the quotes on the ends.
+  reqLen = (6 * slen0) + 2
 
 -- | Constructor for 'Builder' that works on a function with lifted
 -- arguments instead of unlifted ones. This is just as unsafe as the
