@@ -345,7 +345,7 @@ fromBoundedOne (UnsafeBounded.Builder f) = Builder $ \buf0 off0 len0 cs0 s0 ->
             (# sX, bufX, 0#, 4080#, Mutable buf0 off0 cs0 #)
         _ -> (# s0, buf0, off0, len0, cs0 #)
    in case f buf1 off1 s1 of
-        (# s2, off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
+        (# s2, _ #) -> (# s2, buf1, off1 +# 1#, len1 -# 1#, cs1 #)
 
 -- | Create a builder from an unsliced byte sequence. Implemented with 'bytes'.
 byteArray :: ByteArray -> Builder

@@ -209,7 +209,7 @@ copyReverseCommits# marr prevOff (Immutable arr soff sz cs) s0 =
     s1 -> copyReverseCommits# marr off cs s1
 
 -- | Create a builder from a cons-list of 'Char'. These
--- are be UTF-8 encoded.
+-- must be UTF-8 encoded.
 stringUtf8 :: String -> Builder
 {-# inline stringUtf8 #-}
 stringUtf8 cs = Builder (goString cs)
