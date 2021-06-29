@@ -29,6 +29,7 @@ module Data.Bytes.Builder
   , shortTextUtf8
   , shortTextJsonString
   , cstring
+  , cstring#
   , cstringLen
   , stringUtf8
     -- * Encode Integral Types
@@ -153,7 +154,7 @@ import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (RealWorld,(+#),(-#),(<#))
-import GHC.Exts ((*#))
+import GHC.Exts (Addr#,(*#))
 import GHC.Integer.Logarithms.Compat (integerLog2#)
 import GHC.IO (IO(IO),stToIO)
 import GHC.Natural (naturalFromInteger,naturalToInteger)
@@ -390,6 +391,10 @@ copy (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
   )
   where
   !(I# newSz) = max (I# slen#) 4080
+
+cstring# :: Addr# -> Builder
+{-# inline cstring# #-}
+cstring# x = cstring (Exts.Ptr x)
 
 -- | Create a builder from a C string with explicit length. The builder
 -- must be executed before the C string is freed.
