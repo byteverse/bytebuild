@@ -7,12 +7,15 @@ module Data.Bytes.Builder.Template
   ) where
 
 import Control.Monad (when)
+import GHC.Ptr (Ptr(Ptr))
 import Language.Haskell.Meta.Parse (parseExp)
 import Language.Haskell.TH (Q,Exp)
-import Language.Haskell.TH.Lib (stringL,litE)
+import Language.Haskell.TH.Lib (integerL,stringPrimL,litE)
 import Language.Haskell.TH.Quote (QuasiQuoter(..))
 
 import qualified Data.Bytes.Builder as Builder
+import qualified Data.ByteString.Short as SBS
+import qualified Data.Text.Short as TS
 import qualified Language.Haskell.TH as TH
 
 
@@ -50,8 +53,10 @@ data TemplPart
 
 compile :: TemplPart -> Q Exp
 compile (Literal lit) =
-  let strExp = litE . stringL $ lit
-   in [|Builder.shortTextUtf8 $(strExp)|]
+  let bytes = SBS.unpack . TS.toShortByteString . TS.pack $ lit
+      strExp = litE . stringPrimL $ bytes
+      strLen = litE . integerL . fromIntegral $ length bytes
+   in [|Builder.cstringLen (Ptr $(strExp), $(strLen))|]
 compile (Splice str) = case parseExp str of
   Left err -> fail err
   Right hs -> pure hs
