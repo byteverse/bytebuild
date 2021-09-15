@@ -7,6 +7,7 @@ module Data.Bytes.Builder.Template
   ) where
 
 import Control.Monad (when)
+import Data.Bytes.Builder.Class (toBuilder)
 import GHC.Ptr (Ptr(Ptr))
 import Language.Haskell.Meta.Parse (parseExp)
 import Language.Haskell.TH (Q,Exp)
@@ -59,7 +60,7 @@ compile (Literal lit) =
    in [|Builder.cstringLen (Ptr $(strExp), $(strLen))|]
 compile (Splice str) = case parseExp str of
   Left err -> fail err
-  Right hs -> pure hs
+  Right hs -> [|toBuilder $(pure hs)|]
 
 parse :: String -> Either String Template
 parse = partsLoop

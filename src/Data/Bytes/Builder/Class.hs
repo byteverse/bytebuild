@@ -1,12 +1,17 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Data.Bytes.Builder.Class
   ( ToBuilder(..)
   ) where
 
-import Data.Int
-import Data.Word
 import Data.Bytes (Bytes)
-import Data.Text.Short (ShortText)
 import Data.Bytes.Builder (Builder)
+import Data.ByteString.Short (ShortByteString)
+import Data.Int
+import Data.Primitive.ByteArray (ByteArray)
+import Data.Text.Short (ShortText)
+import Data.Word
 
 import qualified Data.Bytes.Builder as Builder
 
@@ -29,9 +34,21 @@ instance ToBuilder Builder where
 instance ToBuilder Bytes where
   toBuilder = Builder.bytes
 
+-- | Uses @byteArray@
+instance ToBuilder ByteArray where
+  toBuilder = Builder.byteArray
+
+-- | Uses @shortByteString@
+instance ToBuilder ShortByteString where
+  toBuilder = Builder.shortByteString
+
 -- | Uses @shortTextUtf8@.
 instance ToBuilder ShortText where
   toBuilder = Builder.shortTextUtf8
+
+-- | Uses @stringUtf8@
+instance ToBuilder String where
+  toBuilder = Builder.stringUtf8
 
 -- | Uses @int64Dec@.
 instance ToBuilder Int64 where
@@ -72,3 +89,7 @@ instance ToBuilder Word8 where
 -- | Uses @wordDec@.
 instance ToBuilder Word where
   toBuilder = Builder.wordDec
+
+-- | uses @doubleDec@
+instance ToBuilder Double where
+  toBuilder = Builder.doubleDec

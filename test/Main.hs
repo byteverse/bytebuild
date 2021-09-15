@@ -16,11 +16,12 @@ import Data.Bytes.Builder.Template (templ)
 import Data.Bytes.Types (MutableBytes(MutableBytes))
 import Data.Char (ord,chr)
 import Data.IORef (IORef,newIORef,readIORef,writeIORef)
+import Data.Maybe (fromMaybe)
 import Data.Primitive (ByteArray)
 import Data.Primitive (PrimArray)
+import Data.Text.Short (ShortText)
 import Data.WideWord (Word128(Word128),Word256(Word256))
 import Data.Word
-import Data.Maybe (fromMaybe)
 import Numeric.Natural (Natural)
 import Test.QuickCheck ((===),Arbitrary)
 import Test.QuickCheck.Instances.Natural ()
@@ -292,13 +293,13 @@ tests = testGroup "Tests"
     ]
   , testGroup "bytes templates"
     [ THU.testCase "A" $ do
-        let name = Just "foo"
+        let name = Just ("foo" :: ShortText)
             msgBuilder = [templ|Hello `fromMaybe "World" name`!\n|]
             msg = Chunks.concat . Builder.run 200 $ msgBuilder
          in Bytes.fromAsciiString "Hello foo!\n" @=? msg
     , THU.testCase "B" $ do
-        let one = "foo"
-            two = "bar"
+        let one = "foo" :: ShortText
+            two = "bar" :: String
             msgBuilder = [templ|`one``two`|]
             msg = Chunks.concat . Builder.run 200 $ msgBuilder
          in Bytes.fromAsciiString "foobar" @=? msg
@@ -306,6 +307,11 @@ tests = testGroup "Tests"
         let msgBuilder = [templ|a backtick for you: \`|]
             msg = Chunks.concat . Builder.run 200 $ msgBuilder
          in Bytes.fromAsciiString "a backtick for you: `" @=? msg
+    , THU.testCase "D" $ do
+        let i = 137 :: Int
+            msgBuilder = [templ|there are `i` lights!|]
+            msg = Chunks.concat . Builder.run 200 $ msgBuilder
+         in Bytes.fromAsciiString "there are 137 lights!" @=? msg
     ]
   ]
 
