@@ -37,9 +37,11 @@ flag checked
 library
   exposed-modules:
     Data.Bytes.Builder
+    Data.Bytes.Builder.Class
     Data.Bytes.Builder.Template
     Data.Bytes.Builder.Unsafe
     Data.Bytes.Builder.Bounded
+    Data.Bytes.Builder.Bounded.Class
     Data.Bytes.Builder.Bounded.Unsafe
   reexported-modules:
     Data.Bytes.Chunks
