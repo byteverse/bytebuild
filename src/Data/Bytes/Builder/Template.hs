@@ -87,7 +87,16 @@ parse = partsLoop
     (_, []) -> Left "unterminated interpolation"
   parseEscape :: String -> Either String (Char, String)
   parseEscape "" = Left "incomplete escape"
-  parseEscape ('`':rest) = pure ('`', rest)
   parseEscape ('\\':rest) = pure ('\\', rest)
+  parseEscape ('`':rest) = pure ('`', rest)
+  parseEscape ('\'':rest) = pure ('\'', rest)
+  parseEscape ('\"':rest) = pure ('\"', rest)
+  parseEscape ('0':rest) = pure ('\0', rest)
+  parseEscape ('a':rest) = pure ('\a', rest)
+  parseEscape ('b':rest) = pure ('\b', rest)
+  parseEscape ('f':rest) = pure ('\f', rest)
   parseEscape ('n':rest) = pure ('\n', rest)
+  parseEscape ('r':rest) = pure ('\r', rest)
+  parseEscape ('t':rest) = pure ('\t', rest)
+  parseEscape ('v':rest) = pure ('\v', rest)
   parseEscape (c:_) = Left $ "unrecognized escape: \\" ++ [c]
