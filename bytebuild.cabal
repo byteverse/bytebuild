@@ -37,8 +37,11 @@ flag checked
 library
   exposed-modules:
     Data.Bytes.Builder
+    Data.Bytes.Builder.Class
+    Data.Bytes.Builder.Template
     Data.Bytes.Builder.Unsafe
     Data.Bytes.Builder.Bounded
+    Data.Bytes.Builder.Bounded.Class
     Data.Bytes.Builder.Bounded.Unsafe
   reexported-modules:
     Data.Bytes.Chunks
@@ -46,11 +49,13 @@ library
     , base >=4.12.0.0 && <5
     , byteslice >=0.2.5 && <0.3
     , bytestring >=0.10.8.2 && <0.11
+    , haskell-src-meta >=0.8
     , integer-logarithms >=1.0.3 && <1.1
     , natural-arithmetic >=0.1 && <0.2
     , primitive-offset >=0.2 && <0.3
     , primitive-unlifted >=0.1.2 && <0.2
     , run-st >=0.1 && <0.2
+    , template-haskell >=2.16
     , text-short >=0.1.3 && <0.2
     , wide-word >=0.1.0.9 && <0.2
   if flag(checked)
@@ -82,6 +87,7 @@ test-suite test
     , primitive-unlifted >=0.1.2
     , quickcheck-classes >=0.6.4
     , quickcheck-instances >=0.3.22
+    , text-short
     , tasty >=1.2.3 && <1.3
     , tasty-hunit >=0.10.0.2 && <0.11
     , tasty-quickcheck >=0.10.1 && <0.11
