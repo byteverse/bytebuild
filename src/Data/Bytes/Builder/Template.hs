@@ -2,8 +2,9 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | Quasiquotation for byte builders.
 module Data.Bytes.Builder.Template
-  ( templ
+  ( bldr
   ) where
 
 import Control.Monad (when)
@@ -19,9 +20,31 @@ import qualified Data.ByteString.Short as SBS
 import qualified Data.Text.Short as TS
 import qualified Language.Haskell.TH as TH
 
-
-templ :: QuasiQuoter
-templ = QuasiQuoter
+-- | A quasiquoter for builders. Haskell expressions are interpolated
+-- with backticks, and the @ToBuilder@ class is used to convert them
+-- to builders. Several common escape sequences for whitespace and
+-- control characters are recongized. Consider the following expression,
+-- where the binding @partition@ has type @Word32@:
+--
+-- > [templ|[WARN] Partition `partition` has invalid data.\n|]
+--
+-- This expression has type @Builder@ and expands to:
+--
+-- > Builder.cstringLen (Ptr "[WARN] Partition "#, 17) <>
+-- > Builder.toBuilder partition <>
+-- > Builder.cstringLen (Ptr " has invalid data.\n"#, 19)
+--
+-- The @ToBuilder@ instance for @Word32@ uses decimal encoding, so this
+-- would result in the following if @partition@ was 42 (with a newline
+-- character at the end):
+--
+-- > [WARN] Partition 42 has invalid data.
+--
+-- In the future, a more sophisticated @bbldr@ variant will be added
+-- that will support expressions where the maximum length of the entire
+-- builder can be computed at compile time. 
+bldr :: QuasiQuoter
+bldr = QuasiQuoter
   { quoteExp = templExp
   , quotePat = notHandled "patterns"
   , quoteType = notHandled "types"

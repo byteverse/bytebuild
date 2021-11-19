@@ -13,6 +13,7 @@ import Data.Bytes.Builder as B
 import Data.Word (Word16)
 import Data.Primitive (ByteArray)
 import qualified Data.Bytes as Bytes
+import qualified Data.Bytes.Text.Ascii
 
 data Word16Tree
   = Branch !Word16Tree !Word16Tree
@@ -32,7 +33,7 @@ encode (Branch a b) =
   B.ascii ')'
 
 expectedSmall :: ByteArray
-expectedSmall = Bytes.toByteArray $ Bytes.fromAsciiString
+expectedSmall = Bytes.toByteArray $ Data.Bytes.Text.Ascii.fromString
   "((AB59,(1F33,2E71)),((((FA9A,247B),890C),(0F13,((55BF,7CF1),389B))),1205))"
 
 

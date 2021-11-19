@@ -12,7 +12,7 @@ import Prelude hiding (replicate)
 import Control.Applicative (liftA2)
 import Control.Monad.ST (runST)
 import Data.Bytes.Builder
-import Data.Bytes.Builder.Template (templ)
+import Data.Bytes.Builder.Template (bldr)
 import Data.Bytes.Types (MutableBytes(MutableBytes))
 import Data.Char (ord,chr)
 import Data.IORef (IORef,newIORef,readIORef,writeIORef)
@@ -35,6 +35,8 @@ import qualified Data.Bytes as Bytes
 import qualified Data.Bytes.Builder as Builder
 import qualified Data.Bytes.Builder.Bounded as Bounded
 import qualified Data.Bytes.Chunks as Chunks
+import qualified Data.Bytes.Text.Ascii as Ascii
+import qualified Data.Bytes.Text.Latin1 as Latin1
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Lazy.Char8 as LB
@@ -294,24 +296,24 @@ tests = testGroup "Tests"
   , testGroup "bytes templates"
     [ THU.testCase "A" $ do
         let name = Just ("foo" :: ShortText)
-            msgBuilder = [templ|Hello `fromMaybe "World" name`!\n|]
+            msgBuilder = [bldr|Hello `fromMaybe "World" name`!\n|]
             msg = Chunks.concat . Builder.run 200 $ msgBuilder
-         in Bytes.fromAsciiString "Hello foo!\n" @=? msg
+         in Ascii.fromString "Hello foo!\n" @=? msg
     , THU.testCase "B" $ do
         let one = "foo" :: ShortText
             two = "bar" :: String
-            msgBuilder = [templ|`one``two`|]
+            msgBuilder = [bldr|`one``two`|]
             msg = Chunks.concat . Builder.run 200 $ msgBuilder
-         in Bytes.fromAsciiString "foobar" @=? msg
+         in Ascii.fromString "foobar" @=? msg
     , THU.testCase "C" $ do
-        let msgBuilder = [templ|a backtick for you: \`|]
+        let msgBuilder = [bldr|a backtick for you: \`|]
             msg = Chunks.concat . Builder.run 200 $ msgBuilder
-         in Bytes.fromAsciiString "a backtick for you: `" @=? msg
+         in Ascii.fromString "a backtick for you: `" @=? msg
     , THU.testCase "D" $ do
         let i = 137 :: Int
-            msgBuilder = [templ|there are `i` lights!|]
+            msgBuilder = [bldr|there are `i` lights!|]
             msg = Chunks.concat . Builder.run 200 $ msgBuilder
-         in Bytes.fromAsciiString "there are 137 lights!" @=? msg
+         in Ascii.fromString "there are 137 lights!" @=? msg
     ]
   ]
 
@@ -362,7 +364,7 @@ newtype AsciiByteArray = AsciiByteArray ByteArray
 
 instance Show AsciiByteArray where
   show (AsciiByteArray b) = if Bytes.all (\w -> w >= 32 && w < 127) (Bytes.fromByteArray b)
-    then Bytes.toLatinString (Bytes.fromByteArray b)
+    then Latin1.toString (Bytes.fromByteArray b)
     else show (show b)
 
 instance Arbitrary Word128 where
