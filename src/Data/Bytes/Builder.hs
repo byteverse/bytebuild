@@ -91,7 +91,10 @@ module Data.Bytes.Builder
   , int16LE
     -- **** LEB128
   , intLEB128
+  , int32LEB128
+  , int64LEB128
   , wordLEB128
+  , word32LEB128
   , word64LEB128
     -- *** Many
   , word8Array
@@ -130,19 +133,19 @@ module Data.Bytes.Builder
 import Prelude hiding (replicate)
 
 import Control.Exception (SomeException,toException)
-import Control.Monad.ST (ST,runST)
 import Control.Monad.IO.Class (MonadIO,liftIO)
-import Data.Bits (unsafeShiftR,unsafeShiftL,xor,finiteBitSize)
+import Control.Monad.ST (ST,runST)
+import Data.Bits (unsafeShiftR)
+import Data.Bytes.Builder.Unsafe (addCommitsLength,copyReverseCommits)
 import Data.Bytes.Builder.Unsafe (Builder(Builder),commitDistance1)
 import Data.Bytes.Builder.Unsafe (BuilderState(BuilderState),pasteIO)
 import Data.Bytes.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
-import Data.Bytes.Builder.Unsafe (reverseCommitsOntoChunks)
 import Data.Bytes.Builder.Unsafe (commitsOntoChunks)
+import Data.Bytes.Builder.Unsafe (reverseCommitsOntoChunks)
 import Data.Bytes.Builder.Unsafe (stringUtf8,cstring,fromEffect)
-import Data.Bytes.Builder.Unsafe (addCommitsLength,copyReverseCommits)
-import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Bytes.Chunks (Chunks(ChunksNil))
 import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
+import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Char (ord)
 import Data.Foldable (foldlM)
 import Data.Int (Int64,Int32,Int16,Int8)
@@ -150,11 +153,12 @@ import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
 import Data.Text.Short (ShortText)
 import Data.WideWord (Word128,Word256)
 import Data.Word (Word64,Word32,Word16,Word8)
+import Data.Word.Zigzag (toZigzag,toZigzag32,toZigzag64)
 import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
+import GHC.Exts (Addr#,(*#))
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (RealWorld,(+#),(-#),(<#))
-import GHC.Exts (Addr#,(*#))
 import GHC.Integer.Logarithms.Compat (integerLog2#)
 import GHC.IO (IO(IO),stToIO)
 import GHC.Natural (naturalFromInteger,naturalToInteger)
@@ -1058,19 +1062,26 @@ indexChar8Array (ByteArray b) (I# i) = C# (Exts.indexCharArray# b i)
 c2w :: Char -> Word8
 c2w = fromIntegral . ord
 
--- In C, this is: (n << 1) ^ (n >> (BIT_WIDTH - 1))
-zigZagNative :: Int -> Word
-zigZagNative s = fromIntegral @Int @Word
-  ((unsafeShiftL s 1) `xor` (unsafeShiftR s (finiteBitSize (undefined :: Word) - 1)))
-
 -- | Encode a signed machine-sized integer with LEB-128. This uses
 -- zig-zag encoding.
 intLEB128 :: Int -> Builder
-intLEB128 = wordLEB128 . zigZagNative
+intLEB128 = wordLEB128 . toZigzag
+
+-- | Encode a 32-bit signed integer with LEB-128. This uses zig-zag encoding.
+int32LEB128 :: Int32 -> Builder
+int32LEB128 = word32LEB128 . toZigzag32
+
+-- | Encode a 64-bit signed integer with LEB-128. This uses zig-zag encoding.
+int64LEB128 :: Int64 -> Builder
+int64LEB128 = word64LEB128 . toZigzag64
 
 -- | Encode a machine-sized word with LEB-128.
 wordLEB128 :: Word -> Builder
 wordLEB128 w = fromBounded Nat.constant (Bounded.wordLEB128 w)
+
+-- | Encode a 32-bit word with LEB-128.
+word32LEB128 :: Word32 -> Builder
+word32LEB128 w = fromBounded Nat.constant (Bounded.word32LEB128 w)
 
 -- | Encode a 64-bit word with LEB-128.
 word64LEB128 :: Word64 -> Builder
