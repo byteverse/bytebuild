@@ -97,6 +97,7 @@ module Data.Bytes.Builder.Bounded
   , int16LE
     -- **** LEB128
   , wordLEB128
+  , word32LEB128
   , word64LEB128
     -- * Encode Floating-Point Types
   , doubleDec
@@ -850,6 +851,10 @@ ascii8 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) (C# c5) (C# c6) (C# c7) = Unsafe.
 wordLEB128 :: Word -> Builder 10
 wordLEB128 (W# w) = lebCommon (W# w)
 
+-- | Encode a 32-bit word with LEB-128.
+word32LEB128 :: Word32 -> Builder 5
+word32LEB128 (W32# w) = lebCommon (W# w)
+
 -- | Encode a 64-bit word with LEB-128.
 word64LEB128 :: Word64 -> Builder 10
 word64LEB128 (W64# w) = lebCommon (W# w)
@@ -1071,4 +1076,3 @@ unsafeWordToWord8 (W# w) = W8# w
 
 foreign import ccall unsafe "bytebuild_paste_double" c_paste_double ::
   MutableByteArray# s -> Int# -> Double# -> IO Int
-
