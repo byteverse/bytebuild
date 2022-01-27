@@ -255,6 +255,16 @@ tests = testGroup "Tests"
         runConcat 1 (naturalDec y)
         ===
         pack (show y)
+    , testGroup "seven/eight encoding"
+      [ THU.testCase "deadbeef" $ do
+        let inp = Latin1.fromString "\xDE\xAD\xBE\xEF"
+        (Chunks.concat . run 16) (sevenEightRight inp)
+          @=? Latin1.fromString "\x6F\x2B\x37\x6E\x78"
+      , THU.testCase "deadbeef-smile" $ do
+        let inp = Latin1.fromString "\xDE\xAD\xBE\xEF"
+        (Chunks.concat . run 16) (sevenEightSmile inp)
+          @=?Latin1.fromString "\x6F\x2B\x37\x6E\x0F"
+      ]
     ]
   , testGroup "alternate"
     [ TQC.testProperty "HexWord64" $ \x y ->
