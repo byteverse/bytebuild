@@ -32,6 +32,9 @@ module Data.Bytes.Builder
   , cstring#
   , cstringLen
   , stringUtf8
+    -- * Byte Sequence Encodings
+  , sevenEightRight
+  , sevenEightSmile
     -- * Encode Integral Types
     -- ** Human-Readable
   , word64Dec
@@ -135,7 +138,7 @@ import Prelude hiding (replicate)
 import Control.Exception (SomeException,toException)
 import Control.Monad.IO.Class (MonadIO,liftIO)
 import Control.Monad.ST (ST,runST)
-import Data.Bits (unsafeShiftR)
+import Data.Bits ((.&.),(.|.),unsafeShiftL,unsafeShiftR)
 import Data.Bytes.Builder.Unsafe (addCommitsLength,copyReverseCommits)
 import Data.Bytes.Builder.Unsafe (Builder(Builder),commitDistance1)
 import Data.Bytes.Builder.Unsafe (BuilderState(BuilderState),pasteIO)
@@ -168,6 +171,7 @@ import Numeric.Natural (Natural)
 
 import qualified Arithmetic.Nat as Nat
 import qualified Arithmetic.Types as Arithmetic
+import qualified Data.Bytes as Bytes
 import qualified Data.Bytes.Builder.Bounded as Bounded
 import qualified Data.Bytes.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
@@ -413,6 +417,66 @@ cstringLen (Exts.Ptr src#, I# slen# ) = Builder
   )
   where
   !(I# newSz) = max (I# slen#) 4080
+
+-- | Encode seven bytes into eight so that the encoded form is eight-bit clean.
+-- Specifically segment the input bytes inot 7-bit groups (lowest-to-highest
+-- index byte, most-to-least significant bit within a byte), pads the last group
+-- with trailing zeros, and forms octects by prepending a zero to each group.
+--
+-- The name was chosen because this pads the input bits with zeros on the right,
+-- and also because this was likely the originally-indended behavior of the
+-- SMILE standard (see 'sevenEightSmile'). Right padding the input bits to a
+-- multiple of seven, as in this variant, is consistent with base64 encodings
+-- (which encodes 3 bytes in 4) and base85 (which encodes 4 bytes in 5).
+sevenEightRight :: Bytes -> Builder
+sevenEightRight bs0 = case toWord 0 0 bs0 of
+  (0, _) -> mempty
+  (len, w) -> go (len * 8) w <> sevenEightSmile (Bytes.unsafeDrop len bs0)
+  where
+  go :: Int -> Word64 -> Builder
+  go !nBits !_ | nBits <= 0 = mempty
+  go !nBits !w =
+    let octet = (fromIntegral $ unsafeShiftR w (8*7+1)) .&. 0x7f
+     in word8 octet <> go (nBits - 7) (unsafeShiftL w 7)
+  toWord :: Int -> Word64 -> Bytes -> (Int, Word64)
+  toWord !i !acc !bs
+    | Bytes.length bs == 0 = (i, acc)
+    | otherwise =
+        let b = fromIntegral @Word8 @Word64 $ Bytes.unsafeIndex bs 0
+            acc' = acc .|. unsafeShiftL b (fromIntegral $ 8 * (7 - i))
+         in if i < 7
+            then toWord (i + 1) acc' (Bytes.unsafeDrop 1 bs)
+            else (i, acc)
+
+-- | Encode seven bytes into eight so that the encoded form is eight-bit clean.
+-- Specifically segment the input bytes inot 7-bit groups (lowest-to-highest
+-- index byte, most-to-least significant bit within a byte), then pad each group
+-- with zeros on the left until each group is an octet.
+--
+-- The name was chosen because this is the implementation that is used (probably
+-- unintentionally) in the reference SMILE implementation, and so is expected tp
+-- be accepted by existing SMILE consumers.
+sevenEightSmile :: Bytes -> Builder
+sevenEightSmile bs0 = case toWord 0 0 bs0 of
+  (0, _) -> mempty
+  (len, w) -> go (len * 8) w <> sevenEightSmile (Bytes.unsafeDrop len bs0)
+  where
+  go :: Int -> Word64 -> Builder
+  go !nBits !w
+    | nBits == 0 = mempty
+    | nBits < 7 = go 7 (unsafeShiftR w (7 - nBits))
+  go !nBits !w =
+    let octet = (fromIntegral $ unsafeShiftR w (8*7+1)) .&. 0x7f
+     in word8 octet <> go (nBits - 7) (unsafeShiftL w 7)
+  toWord :: Int -> Word64 -> Bytes -> (Int, Word64)
+  toWord !i !acc !bs
+    | Bytes.length bs == 0 = (i, acc)
+    | otherwise =
+        let b = fromIntegral @Word8 @Word64 $ Bytes.unsafeIndex bs 0
+            acc' = acc .|. unsafeShiftL b (fromIntegral $ 8 * (7 - i))
+         in if i < 7
+            then toWord (i + 1) acc' (Bytes.unsafeDrop 1 bs)
+            else (i, acc)
 
 -- | Create a builder from two byte sequences. This always results in two
 -- calls to @memcpy@. This is beneficial when the byte sequences are
