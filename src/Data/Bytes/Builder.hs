@@ -156,7 +156,7 @@ import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
 import Data.Text.Short (ShortText)
 import Data.WideWord (Word128,Word256)
 import Data.Word (Word64,Word32,Word16,Word8)
-import Data.Word.Zigzag (toZigzag,toZigzag32,toZigzag64)
+import Data.Word.Zigzag (toZigzagNative,toZigzag32,toZigzag64)
 import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (Addr#,(*#))
@@ -1129,7 +1129,7 @@ c2w = fromIntegral . ord
 -- | Encode a signed machine-sized integer with LEB-128. This uses
 -- zig-zag encoding.
 intLEB128 :: Int -> Builder
-intLEB128 = wordLEB128 . toZigzag
+intLEB128 = wordLEB128 . toZigzagNative
 
 -- | Encode a 32-bit signed integer with LEB-128. This uses zig-zag encoding.
 int32LEB128 :: Int32 -> Builder
