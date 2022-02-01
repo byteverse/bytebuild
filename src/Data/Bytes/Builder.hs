@@ -22,6 +22,7 @@ module Data.Bytes.Builder
     -- * Materialized Byte Sequences
   , bytes
   , copy
+  , copyCons
   , copy2
   , insert
   , byteArray
@@ -399,6 +400,22 @@ copy (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
   )
   where
   !(I# newSz) = max (I# slen#) 4080
+
+-- | Variant of 'copy' that additionally pastes an extra byte in
+-- front of the bytes.
+copyCons :: Word8 -> Bytes -> Builder
+copyCons (W8# w0) (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
+  (\buf0 off0 len0 cs0 s0 -> case len0 <# (slen# +# 1#) of
+    1# -> case Exts.newByteArray# newSz s0 of
+        (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 1# slen# s1 of
+          s2 -> case Exts.writeWord8Array# buf1 0# w0 s2 of
+            s3 -> (# s3, buf1, slen# +# 1#, newSz -# (slen# +# 1#), Mutable buf0 off0 cs0 #)
+    _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 (off0 +# 1#) slen# s0
+             !s2 = Exts.writeWord8Array# buf0 off0 w0 s1
+          in (# s2, buf0, off0 +# (slen# +# 1#), len0 -# (slen# +# 1#), cs0 #)
+  )
+  where
+  !(I# newSz) = max ((I# slen#) + 1) 4080
 
 cstring# :: Addr# -> Builder
 {-# inline cstring# #-}

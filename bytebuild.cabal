@@ -78,7 +78,7 @@ test-suite test
     HexWord64
     Word16Tree
   build-depends:
-    , QuickCheck >=2.13.1 && <2.14
+    , QuickCheck >=2.13.1 && <2.15
     , base >=4.12.0.0 && <5
     , bytebuild
     , byteslice
