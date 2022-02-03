@@ -132,6 +132,8 @@ module Data.Bytes.Builder
   , replicate
     -- * Control
   , flush
+    -- * Rebuild
+  , rebuild
   ) where
 
 import Prelude hiding (replicate)
@@ -160,7 +162,7 @@ import Data.Word (Word64,Word32,Word16,Word8)
 import Data.Word.Zigzag (toZigzagNative,toZigzag32,toZigzag64)
 import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
-import GHC.Exts (Addr#,(*#))
+import GHC.Exts (Addr#,(*#),oneShot)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (RealWorld,(+#),(-#),(<#))
 import GHC.Integer.Logarithms.Compat (integerLog2#)
@@ -201,8 +203,8 @@ runOnto hint@(I# hint# ) (Builder f) cs0 = runST $ do
   reverseCommitsOntoChunks cs0 cs
 
 -- | Variant of 'runOnto' that conses the additional chunks
--- in reverse order. 
-reversedOnto :: 
+-- in reverse order.
+reversedOnto ::
      Int -- ^ Size of initial chunk (use 4080 if uncertain)
   -> Builder -- ^ Builder
   -> Chunks
@@ -1261,7 +1263,7 @@ replicate !len !w = fromEffect len
 -- For numbers less than 1073741829, this gives a correct answer.
 approxDiv10 :: Word -> Word
 approxDiv10 !n = unsafeShiftR (0x1999999A * n) 32
-  
+
 -- -- A weird beast useful for rewrite rules. Not yet used. This will
 -- -- ultimately replace fromEffect and fromBounded.
 -- require :: Int -> Builder
@@ -1276,3 +1278,22 @@ approxDiv10 !n = unsafeShiftR (0x1999999A * n) 32
 
 unsafeWordToWord8 :: Word -> Word8
 unsafeWordToWord8 (W# w) = W8# w
+
+-- | This function and the documentation for it are copied from
+-- Takano Akio's fast-builder library.
+--
+-- @'rebuild' b@ is equivalent to @b@, but it allows GHC to assume
+-- that @b@ will be run at most once. This can enable various
+-- optimizations that greately improve performance.
+--
+-- There are two types of typical situations where a use of 'rebuild'
+-- is often a win:
+--
+-- * When constructing a builder using a recursive function. e.g.
+--  @rebuild $ foldr ...@.
+-- * When constructing a builder using a conditional expression. e.g.
+--  @rebuild $ case x of ... @
+rebuild :: Builder -> Builder
+{-# inline rebuild #-}
+rebuild (Builder f) = Builder $ oneShot $ \a -> oneShot $ \b -> oneShot $ \c -> oneShot $ \d -> oneShot $ \e ->
+  f a b c d e
