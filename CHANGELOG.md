@@ -5,6 +5,15 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
+## 0.3.10.0 -- 2022-03-01
+
+* Add upper bound on base since this does not build with GHC 9.2.
+* Add `rebuild`
+* Add `copyCons` for copying small byte sequences with extra byte in front
+* Use `zigzag` library from hackage
+* Seven eights encoding
+* Finish out LEB for 32-bit and signed 32/64
+
 ## 0.3.9.0 -- 2021-11-19
 
 * Add `cstring#`
