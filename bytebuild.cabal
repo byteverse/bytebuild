@@ -63,6 +63,9 @@ library
     , zigzag
   if impl(ghc >= 9.2)
     hs-source-dirs: src-9.2
+  else 
+    if impl(ghc >= 9.0)
+      hs-source-dirs: src-9.0
   if flag(checked)
     build-depends: primitive-checked >= 0.7 && <0.8
   else
