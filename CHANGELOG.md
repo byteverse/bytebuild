@@ -5,6 +5,10 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
+## 0.3.11.0 -- 2022-??-??
+
+* Support GHC 9.2
+
 ## 0.3.10.0 -- 2022-03-01
 
 * Add upper bound on base since this does not build with GHC 9.2.

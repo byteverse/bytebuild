@@ -1,10 +1,12 @@
 {-# language MagicHash #-}
 
-module Compat 
+-- This is actually used with both GHC 8.10 and with GHC 9.0.
+-- The name of the directory is a little misleading.
+module Compat
   ( int8ToInt#
   , int16ToInt#
   , int32ToInt#
-  , wordToWord8# 
+  , wordToWord8#
   , wordToWord16#
   , wordToWord32#
   , word8ToWord#
@@ -12,13 +14,40 @@ module Compat
   , word32ToWord#
   ) where
 
+import GHC.Exts (Int#,Word#)
 
-int8ToInt# = id
-int16ToInt# = id
-int32ToInt# = id
-wordToWord8#  = id
-wordToWord16# = id
-wordToWord32# = id
-word8ToWord# = id
-word16ToWord# = id
-word32ToWord# = id
+int8ToInt# :: Int# -> Int#
+{-# inline int8ToInt# #-}
+int8ToInt# x = x
+
+int16ToInt# :: Int# -> Int#
+{-# inline int16ToInt# #-}
+int16ToInt# x = x
+
+int32ToInt# :: Int# -> Int#
+{-# inline int32ToInt# #-}
+int32ToInt# x = x
+
+wordToWord8# :: Word# -> Word#
+{-# inline wordToWord8# #-}
+wordToWord8#  x = x
+
+wordToWord16# :: Word# -> Word#
+{-# inline wordToWord16# #-}
+wordToWord16# x = x
+
+wordToWord32# :: Word# -> Word#
+{-# inline wordToWord32# #-}
+wordToWord32# x = x
+
+word8ToWord# :: Word# -> Word#
+{-# inline word8ToWord# #-}
+word8ToWord# x = x
+
+word16ToWord# :: Word# -> Word#
+{-# inline word16ToWord# #-}
+word16ToWord# x = x
+
+word32ToWord# :: Word# -> Word#
+{-# inline word32ToWord# #-}
+word32ToWord# x = x
