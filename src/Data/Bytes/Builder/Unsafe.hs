@@ -47,6 +47,8 @@ import GHC.Exts (RealWorld,IsString,Int#,State#)
 import GHC.ST (ST(ST))
 import GHC.IO (stToIO)
 
+import qualified Compat as C
+
 import qualified Data.Bytes.Builder.Bounded as Bounded
 import qualified Data.Bytes.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
@@ -246,16 +248,16 @@ goString (c : cs) buf0 off0 len0 cs0 s0 = case len0 ># 3# of
 
 goCString :: Addr# -> MutableByteArray# s -> Int# -> Int# -> Commits s
   -> State# s -> (# State# s, MutableByteArray# s, Int#, Int#, Commits s #)
-goCString addr buf0 off0 len0 cs0 s0 = case Exts.indexWord8OffAddr# addr 0# of
+goCString addr buf0 off0 len0 cs0 s0 = case C.word8ToWord# (Exts.indexWord8OffAddr# addr 0#) of
   0## -> (# s0, buf0, off0, len0, cs0 #)
   w -> case len0 of
     0# -> case Exts.newByteArray# 4080# s0 of
-      (# s1, buf1 #) -> case Exts.writeWord8Array# buf1 0# w s1 of
+      (# s1, buf1 #) -> case Exts.writeWord8Array# buf1 0# (C.wordToWord8# w) s1 of
         s2 -> goCString
           (Exts.plusAddr# addr 1# ) buf1 1# (4080# -# 1# )
           (Mutable buf0 off0 cs0)
           s2
-    _ -> case Exts.writeWord8Array# buf0 off0 w s0 of
+    _ -> case Exts.writeWord8Array# buf0 off0 (C.wordToWord8# w) s0 of
       s1 -> goCString (Exts.plusAddr# addr 1# ) buf0 (off0 +# 1# ) (len0 -# 1# ) cs0 s1
 
 fromEffect ::
