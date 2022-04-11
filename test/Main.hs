@@ -255,6 +255,16 @@ tests = testGroup "Tests"
         runConcat 1 (naturalDec y)
         ===
         pack (show y)
+    , testGroup "leb128-encoding"
+      [ THU.testCase "16" $
+          Chunks.concat (run 16 (word64LEB128 16))
+          @=?
+          Latin1.fromString "\x10"
+      , THU.testCase "deadbeef-smile" $ do
+        let inp = Latin1.fromString "\xDE\xAD\xBE\xEF"
+        (Chunks.concat . run 16) (sevenEightSmile inp)
+          @=?Latin1.fromString "\x6F\x2B\x37\x6E\x0F"
+      ]
     , testGroup "seven/eight encoding"
       [ THU.testCase "deadbeef" $ do
         let inp = Latin1.fromString "\xDE\xAD\xBE\xEF"

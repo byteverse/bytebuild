@@ -1162,14 +1162,17 @@ int64LEB128 = word64LEB128 . toZigzag64
 
 -- | Encode a machine-sized word with LEB-128.
 wordLEB128 :: Word -> Builder
+{-# inline wordLEB128 #-}
 wordLEB128 w = fromBounded Nat.constant (Bounded.wordLEB128 w)
 
 -- | Encode a 32-bit word with LEB-128.
 word32LEB128 :: Word32 -> Builder
+{-# inline word32LEB128 #-}
 word32LEB128 w = fromBounded Nat.constant (Bounded.word32LEB128 w)
 
 -- | Encode a 64-bit word with LEB-128.
 word64LEB128 :: Word64 -> Builder
+{-# inline word64LEB128 #-}
 word64LEB128 w = fromBounded Nat.constant (Bounded.word64LEB128 w)
 
 -- | Encode a signed arbitrary-precision integer as decimal.

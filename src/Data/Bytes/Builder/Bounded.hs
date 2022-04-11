@@ -851,14 +851,17 @@ ascii8 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) (C# c5) (C# c6) (C# c7) = Unsafe.
 
 -- | Encode a machine-sized word with LEB-128.
 wordLEB128 :: Word -> Builder 10
+{-# inline wordLEB128 #-}
 wordLEB128 (W# w) = lebCommon (W# w)
 
 -- | Encode a 32-bit word with LEB-128.
 word32LEB128 :: Word32 -> Builder 5
+{-# inline word32LEB128 #-}
 word32LEB128 (W32# w) = lebCommon (W# (C.word32ToWord# w))
 
 -- | Encode a 64-bit word with LEB-128.
 word64LEB128 :: Word64 -> Builder 10
+{-# inline word64LEB128 #-}
 word64LEB128 (W64# w) = lebCommon (W# w)
 
 lebCommon :: Word -> Builder n
