@@ -1,7 +1,7 @@
 cabal-version: 2.2
 name: bytebuild
-version: 0.3.10.0
-synopsis: Serialize to a small byte arrays
+version: 0.3.11.0
+synopsis: Build byte arrays
 description:
   This is similar to the builder facilities provided by
   `Data.ByteString.Builder`. It is intended to be used in

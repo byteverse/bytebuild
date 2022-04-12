@@ -5,9 +5,11 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
-## 0.3.11.0 -- 2022-??-??
+## 0.3.11.0 -- 2022-04-12
 
 * Support GHC 9.2
+* Inline pragmas for better LEB encoding perf
+* Bump upper bound on tasty in test suite
 
 ## 0.3.10.0 -- 2022-03-01
 
