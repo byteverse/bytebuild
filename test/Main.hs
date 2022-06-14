@@ -260,6 +260,10 @@ tests = testGroup "Tests"
           Chunks.concat (run 16 (word64LEB128 16))
           @=?
           Latin1.fromString "\x10"
+      , THU.testCase "1000000" $
+          Chunks.concat (run 16 (word64LEB128 1000000))
+          @=?
+          Exts.fromList [0xc0,0x84,0x3d]
       , THU.testCase "deadbeef-smile" $ do
         let inp = Latin1.fromString "\xDE\xAD\xBE\xEF"
         (Chunks.concat . run 16) (sevenEightSmile inp)
