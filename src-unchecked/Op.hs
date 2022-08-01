@@ -1,3 +1,5 @@
+{-# language MagicHash #-}
+
 module Op
   ( writeCharArray#
   ) where
