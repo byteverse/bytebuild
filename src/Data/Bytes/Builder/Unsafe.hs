@@ -53,6 +53,7 @@ import qualified Data.Bytes.Builder.Bounded as Bounded
 import qualified Data.Bytes.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
 import qualified GHC.Exts as Exts
+import qualified Op
 
 -- | An unmaterialized sequence of bytes that may be pasted
 -- into a mutable byte array.
@@ -203,11 +204,11 @@ copyReverseCommits# ::
 copyReverseCommits# _ off Initial s0 = (# s0, off #)
 copyReverseCommits# marr prevOff (Mutable arr sz cs) s0 =
   let !off = prevOff -# sz in
-  case Exts.copyMutableByteArray# arr 0# marr off sz s0 of
+  case Op.copyMutableByteArray# arr 0# marr off sz s0 of
     s1 -> copyReverseCommits# marr off cs s1
 copyReverseCommits# marr prevOff (Immutable arr soff sz cs) s0 =
   let !off = prevOff -# sz in
-  case Exts.copyByteArray# arr soff marr off sz s0 of
+  case Op.copyByteArray# arr soff marr off sz s0 of
     s1 -> copyReverseCommits# marr off cs s1
 
 -- | Create a builder from a cons-list of 'Char'. These

@@ -182,6 +182,7 @@ import qualified Data.Bytes.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
 import qualified Data.Text.Short as TS
 import qualified GHC.Exts as Exts
+import qualified Op as Op
 
 -- | Run a builder.
 run ::
@@ -384,9 +385,9 @@ bytes (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
       1# -> case Exts.newByteArray# 0# s0 of
         (# s1, buf1 #) -> (# s1, buf1, 0#, 0#, Immutable src# soff# slen# (Mutable buf0 off0 cs0) #)
       _ -> case Exts.newByteArray# 4080# s0 of
-        (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 0# slen# s1 of
+        (# s1, buf1 #) -> case Op.copyByteArray# src# soff# buf1 0# slen# s1 of
           s2 -> (# s2, buf1, slen#, 4080# -# slen#, Mutable buf0 off0 cs0 #)
-    _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
+    _ -> let s1 = Op.copyByteArray# src# soff# buf0 off0 slen# s0 in
       (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
   )
 
@@ -397,9 +398,9 @@ copy :: Bytes -> Builder
 copy (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
   (\buf0 off0 len0 cs0 s0 -> case len0 <# slen# of
     1# -> case Exts.newByteArray# newSz s0 of
-        (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 0# slen# s1 of
+        (# s1, buf1 #) -> case Op.copyByteArray# src# soff# buf1 0# slen# s1 of
           s2 -> (# s2, buf1, slen#, newSz -# slen#, Mutable buf0 off0 cs0 #)
-    _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 off0 slen# s0 in
+    _ -> let !s1 = Op.copyByteArray# src# soff# buf0 off0 slen# s0 in
       (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
   )
   where
@@ -411,10 +412,10 @@ copyCons :: Word8 -> Bytes -> Builder
 copyCons (W8# w0) (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
   (\buf0 off0 len0 cs0 s0 -> case len0 <# (slen# +# 1#) of
     1# -> case Exts.newByteArray# newSz s0 of
-        (# s1, buf1 #) -> case Exts.copyByteArray# src# soff# buf1 1# slen# s1 of
+        (# s1, buf1 #) -> case Op.copyByteArray# src# soff# buf1 1# slen# s1 of
           s2 -> case Exts.writeWord8Array# buf1 0# w0 s2 of
             s3 -> (# s3, buf1, slen# +# 1#, newSz -# (slen# +# 1#), Mutable buf0 off0 cs0 #)
-    _ -> let !s1 = Exts.copyByteArray# src# soff# buf0 (off0 +# 1#) slen# s0
+    _ -> let !s1 = Op.copyByteArray# src# soff# buf0 (off0 +# 1#) slen# s0
              !s2 = Exts.writeWord8Array# buf0 off0 w0 s1
           in (# s2, buf0, off0 +# (slen# +# 1#), len0 -# (slen# +# 1#), cs0 #)
   )
@@ -507,11 +508,11 @@ copy2 (Bytes (ByteArray srcA# ) (I# soffA# ) (I# slenA# ))
       (Bytes (ByteArray srcB# ) (I# soffB# ) (I# slenB# )) = Builder
   (\buf0 off0 len0 cs0 s0 -> case len0 <# slen# of
     1# -> case Exts.newByteArray# newSz s0 of
-        (# s1, buf1 #) -> case Exts.copyByteArray# srcA# soffA# buf1 0# slenA# s1 of
-          s2 -> case Exts.copyByteArray# srcB# soffB# buf1 slenA# slenB# s2 of
+        (# s1, buf1 #) -> case Op.copyByteArray# srcA# soffA# buf1 0# slenA# s1 of
+          s2 -> case Op.copyByteArray# srcB# soffB# buf1 slenA# slenB# s2 of
             s3 -> (# s3, buf1, slen#, newSz -# slen#, Mutable buf0 off0 cs0 #)
-    _ -> let !s1 = Exts.copyByteArray# srcA# soffA# buf0 off0 slenA# s0
-             !s2 = Exts.copyByteArray# srcB# soffB# buf0 (off0 +# slenA# ) slenB# s1 in
+    _ -> let !s1 = Op.copyByteArray# srcA# soffA# buf0 off0 slenA# s0
+             !s2 = Op.copyByteArray# srcB# soffB# buf0 (off0 +# slenA# ) slenB# s1 in
       (# s2, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
   )
   where
