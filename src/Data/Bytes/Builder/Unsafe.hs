@@ -1,3 +1,4 @@
+{-# language CPP #-}
 {-# language BangPatterns #-}
 {-# language DuplicateRecordFields #-}
 {-# language LambdaCase #-}
@@ -204,7 +205,13 @@ copyReverseCommits# ::
 copyReverseCommits# _ off Initial s0 = (# s0, off #)
 copyReverseCommits# marr prevOff (Mutable arr sz cs) s0 =
   let !off = prevOff -# sz in
-  case Op.copyMutableByteArray# arr 0# marr off sz s0 of
+  case
+#if MIN_VERSION_base(4,17,0)
+    Exts.copyMutableByteArray#
+#else
+    Op.copyMutableByteArray#
+#endif
+    arr 0# marr off sz s0 of
     s1 -> copyReverseCommits# marr off cs s1
 copyReverseCommits# marr prevOff (Immutable arr soff sz cs) s0 =
   let !off = prevOff -# sz in
