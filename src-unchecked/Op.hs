@@ -3,6 +3,7 @@
 module Op
   ( writeCharArray#
   , copyByteArray#
+  , copyMutableByteArray#
   ) where
 
-import GHC.Exts (writeCharArray#,copyByteArray#,copyMutableByteArray#)
+import GHC.Exts (copyMutableByteArray#,writeCharArray#,copyByteArray#,copyMutableByteArray#)

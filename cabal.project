@@ -10,5 +10,4 @@ tests: True
 source-repository-package
     type: git
     location: https://github.com/parsonsmatt/wide-word
-    tag: 8d8447cda8b6410c262408f605d0679623367071
-
+    tag: 4d91acc4e3c0880d2d399d8adc337395df2b6026
