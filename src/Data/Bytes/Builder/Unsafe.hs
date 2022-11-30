@@ -1,4 +1,3 @@
-{-# language CPP #-}
 {-# language BangPatterns #-}
 {-# language DuplicateRecordFields #-}
 {-# language LambdaCase #-}
