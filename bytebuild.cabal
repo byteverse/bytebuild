@@ -49,7 +49,7 @@ library
   reexported-modules:
     Data.Bytes.Chunks
   build-depends:
-    , base >=4.12.0.0 && <4.17
+    , base >=4.12.0.0 && <4.18
     , byteslice >=0.2.6 && <0.3
     , bytestring >=0.10.8.2 && <0.12
     , haskell-src-meta >=0.8
@@ -102,7 +102,7 @@ test-suite test
     , tasty >=1.2.3 && <1.5
     , tasty-hunit >=0.10.0.2 && <0.11
     , tasty-quickcheck >=0.10.1 && <0.11
-    , text >=1.2 && <1.3
+    , text >=1.2 && <2.2
     , vector
     , wide-word >=0.1.0.9 && <0.2
 
