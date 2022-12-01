@@ -5,6 +5,10 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
+## 0.3.12.0 -- 2022-12-01
+
+* Support GHC 9.4.
+
 ## 0.3.11.0 -- 2022-04-12
 
 * Support GHC 9.2
