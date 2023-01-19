@@ -1,3 +1,4 @@
+{-# language CPP #-}
 {-# language BangPatterns #-}
 {-# language DataKinds #-}
 {-# language DuplicateRecordFields #-}
@@ -27,6 +28,9 @@ module Data.Bytes.Builder
   , insert
   , byteArray
   , shortByteString
+#if MIN_VERSION_text(2,0,0)
+  , textUtf8
+#endif
   , shortTextUtf8
   , shortTextJsonString
   , cstring
@@ -183,6 +187,12 @@ import qualified Data.Primitive as PM
 import qualified Data.Text.Short as TS
 import qualified GHC.Exts as Exts
 import qualified Op as Op
+
+#if MIN_VERSION_text(2,0,0)
+import Data.Text (Text)
+import qualified Data.Text.Internal as I
+import qualified Data.Text.Array as A
+#endif
 
 -- | Run a builder.
 run ::
@@ -793,6 +803,13 @@ shortTextUtf8 :: ShortText -> Builder
 shortTextUtf8 a =
   let ba = shortTextToByteArray a
    in bytes (Bytes ba 0 (PM.sizeofByteArray ba))
+
+#if MIN_VERSION_text(2,0,0)
+-- | Create a builder from text. The text will be UTF-8 encoded.
+textUtf8 :: Text -> Builder
+textUtf8 (I.Text (A.ByteArray b) off len) =
+  bytes (Bytes (ByteArray b) off len)
+#endif
 
 -- | Create a builder from text. The text will be UTF-8 encoded,
 -- and JSON special characters will be escaped. Additionally, the
