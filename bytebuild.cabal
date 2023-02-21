@@ -18,7 +18,7 @@ description:
   that runs out of space simply aborts and is rerun at the beginning
   of the next chunk. This strategy for building is suitable for most
   CSVs and several line protocols (carbon, InfluxDB, etc.).
-  
+
 homepage: https://github.com/byteverse/bytebuild
 bug-reports: https://github.com/byteverse/bytebuild/issues
 license: BSD-3-Clause
@@ -68,10 +68,10 @@ library
     if impl(ghc >= 8.10)
       hs-source-dirs: src-9.0
   if flag(checked)
-    build-depends: primitive-checked >= 0.7 && <0.8
+    build-depends: primitive-checked >= 0.7 && <0.9
     hs-source-dirs: src-checked
   else
-    build-depends: primitive >= 0.7 && <0.8
+    build-depends: primitive >= 0.7 && <0.9
     hs-source-dirs: src-unchecked
   ghc-options: -Wall -O2
   hs-source-dirs: src
