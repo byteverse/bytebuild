@@ -22,6 +22,7 @@ module Data.Bytes.Builder
   , putManyConsLength
     -- * Materialized Byte Sequences
   , bytes
+  , chunks
   , copy
   , copyCons
   , copy2
@@ -153,7 +154,7 @@ import Data.Bytes.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.Bytes.Builder.Unsafe (commitsOntoChunks)
 import Data.Bytes.Builder.Unsafe (reverseCommitsOntoChunks)
 import Data.Bytes.Builder.Unsafe (stringUtf8,cstring,fromEffect)
-import Data.Bytes.Chunks (Chunks(ChunksNil))
+import Data.Bytes.Chunks (Chunks(ChunksCons,ChunksNil))
 import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
 import Data.Char (ord)
@@ -166,7 +167,7 @@ import Data.Word (Word64,Word32,Word16,Word8)
 import Data.Word.Zigzag (toZigzagNative,toZigzag32,toZigzag64)
 import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
-import GHC.Exts (Addr#,(*#),oneShot)
+import GHC.Exts (MutableByteArray#,Addr#,(*#),oneShot)
 import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (RealWorld,(+#),(-#),(<#))
 import GHC.Integer.Logarithms.Compat (integerLog2#)
@@ -400,6 +401,29 @@ bytes (Bytes (ByteArray src# ) (I# soff# ) (I# slen# )) = Builder
     _ -> let s1 = Op.copyByteArray# src# soff# buf0 off0 slen# s0 in
       (# s1, buf0, off0 +# slen#, len0 -# slen#, cs0 #)
   )
+
+-- | Paste byte chunks into a builder.
+chunks :: Chunks -> Builder
+{-# noinline chunks #-}
+chunks xs0 =
+  -- Implementation note: It would probably be good to begin with a
+  -- goCopying phase before switching to goInserting. If the total
+  -- size of the chunks is small, we could end up just copying
+  -- everything into the existing buffer, which would be nice.
+  -- Note: This function needs a test in the test suite.
+  Builder $ \buf0 off0 len0 cs0 s0 -> case xs0 of
+    ChunksNil -> (# s0, buf0, off0, len0, cs0 #)
+    ChunksCons{} -> goInserting xs0 cs0 s0
+  where
+  -- Notice that goNoncopying does not take a buffer as an argument. At the
+  -- very end, we create a 128-byte buffer with nothing in it and present
+  -- that as the new buffer. We *cannot* simply reuse the old buffer with
+  -- the length set to zero because commitDistance1 would get confused.
+  goInserting :: Chunks -> Commits s -> State# s -> (# State# s, MutableByteArray# s, Int#, Int#, Commits s #)
+  goInserting ChunksNil !cs s0 = case Exts.newByteArray# 128# s0 of
+    (# s1, buf1 #) -> (# s1, buf1, 0#, 128#, cs #)
+  goInserting (ChunksCons (Bytes (ByteArray b) (I# off) (I# len)) ys) !cs s0 =
+    goInserting ys (Immutable b off len cs) s0
 
 -- | Create a builder from a byte sequence. This always results in a
 -- call to @memcpy@. This is beneficial when the byte sequence is
