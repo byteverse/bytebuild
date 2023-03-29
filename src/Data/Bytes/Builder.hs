@@ -413,7 +413,7 @@ chunks xs0 =
   -- Note: This function needs a test in the test suite.
   Builder $ \buf0 off0 len0 cs0 s0 -> case xs0 of
     ChunksNil -> (# s0, buf0, off0, len0, cs0 #)
-    ChunksCons{} -> goInserting xs0 cs0 s0
+    ChunksCons{} -> goInserting xs0 (Mutable buf0 off0 cs0) s0
   where
   -- Notice that goNoncopying does not take a buffer as an argument. At the
   -- very end, we create a 128-byte buffer with nothing in it and present
