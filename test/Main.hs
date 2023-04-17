@@ -242,6 +242,10 @@ tests = testGroup "Tests"
          in runConcat 1 (foldMap word256BE xs)
             ===
             runConcat 1 (word256ArrayBE ys 0 (Prelude.length xs))
+    , TQC.testProperty "word64Vlq" $ \(x :: Word64) ->
+        runConcat 1 (word64Vlq x)
+        ===
+        naiveVlq (fromIntegral x)
     , TQC.testProperty "word64LEB128" $ \(x :: Word64) ->
         runConcat 1 (word64LEB128 x)
         ===
@@ -415,4 +419,19 @@ naiveLeb128 x =
         xs' = w : xs
      in if q == 0 
           then L.reverse xs'
+          else go xs' q
+
+naiveVlq :: Natural -> ByteArray
+naiveVlq x =
+  Bytes.toByteArray (Bytes.unsafeDrop 1 (Exts.fromList (0xFF : go [] x)))
+  where
+  go !xs !n =
+    let (q,r) = quotRem n 128
+        r' = fromIntegral @Natural @Word8 r
+        w = case xs of
+          [] -> r'
+          _ -> Bits.setBit r' 7
+        xs' = w : xs
+     in if q == 0 
+          then xs'
           else go xs' q

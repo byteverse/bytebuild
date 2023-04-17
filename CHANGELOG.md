@@ -5,6 +5,10 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
+## 0.3.13.0 -- 2023-??-??
+
+* Add VLQ builders for Word32 and Word64.
+
 ## 0.3.12.0 -- 2022-12-01
 
 * Support GHC 9.4.

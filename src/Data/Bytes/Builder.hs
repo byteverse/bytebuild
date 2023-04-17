@@ -105,6 +105,10 @@ module Data.Bytes.Builder
   , wordLEB128
   , word32LEB128
   , word64LEB128
+    -- **** VLQ
+  , wordVlq
+  , word32Vlq
+  , word64Vlq
     -- *** Many
   , word8Array
     -- **** Big Endian
@@ -1216,6 +1220,21 @@ word32LEB128 w = fromBounded Nat.constant (Bounded.word32LEB128 w)
 word64LEB128 :: Word64 -> Builder
 {-# inline word64LEB128 #-}
 word64LEB128 w = fromBounded Nat.constant (Bounded.word64LEB128 w)
+
+-- | Encode a machine-sized word with VLQ.
+wordVlq :: Word -> Builder
+{-# inline wordVlq #-}
+wordVlq w = fromBounded Nat.constant (Bounded.wordVlq w)
+
+-- | Encode a 32-bit word with VLQ.
+word32Vlq :: Word32 -> Builder
+{-# inline word32Vlq #-}
+word32Vlq w = fromBounded Nat.constant (Bounded.word32Vlq w)
+
+-- | Encode a 64-bit word with VLQ.
+word64Vlq :: Word64 -> Builder
+{-# inline word64Vlq #-}
+word64Vlq w = fromBounded Nat.constant (Bounded.word64Vlq w)
 
 -- | Encode a signed arbitrary-precision integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.

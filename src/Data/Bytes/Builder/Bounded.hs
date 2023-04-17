@@ -5,6 +5,7 @@
 {-# language KindSignatures #-}
 {-# language LambdaCase #-}
 {-# language MagicHash #-}
+{-# language NumericUnderscores #-}
 {-# language RankNTypes #-}
 {-# language ScopedTypeVariables #-}
 {-# language TypeApplications #-}
@@ -97,9 +98,19 @@ module Data.Bytes.Builder.Bounded
   , int32LE
   , int16LE
     -- **** LEB128
+    -- | LEB128 encodes an integer in 7-bit units, least significant bits first,
+    -- with the high bit of each output byte set to 1 in all bytes except for
+    -- the final byte.
   , wordLEB128
   , word32LEB128
   , word64LEB128
+    -- **** VLQ
+    -- | VLQ (also known as VByte, Varint, VInt) encodes an integer in 7-bit
+    -- units, most significant bits first, with the high bit of each output byte
+    -- set to 1 in all bytes except for the final byte.
+  , wordVlq
+  , word32Vlq
+  , word64Vlq
     -- * Encode Floating-Point Types
   , doubleDec
   ) where
@@ -886,6 +897,27 @@ ascii8 (C# c0) (C# c1) (C# c2) (C# c3) (C# c4) (C# c5) (C# c6) (C# c7) = Unsafe.
   primitive_ (writeCharArray# arr (off +# 7# ) c7)
   pure (I# (off +# 8# ))
 
+-- | Encode a machine-sized word with VLQ (also known as VByte, Varint, VInt).
+wordVlq :: Word -> Builder 10
+{-# inline wordVlq #-}
+wordVlq (W# w) = vlqCommon (W# w)
+
+-- | Encode a 32-bit word with VLQ (also known as VByte, Varint, VInt).
+word32Vlq :: Word32 -> Builder 5
+{-# inline word32Vlq #-}
+word32Vlq (W32# w) = vlqCommon (W# (C.word32ToWord# w))
+
+-- | Encode a 64-bit word with VLQ (also known as VByte, Varint, VInt).
+word64Vlq :: Word64 -> Builder 10
+{-# inline word64Vlq #-}
+word64Vlq (W64# w) = vlqCommon (W#
+#if MIN_VERSION_base(4,17,0)
+    (word64ToWord# w)
+#else
+    w
+#endif
+  )
+
 -- | Encode a machine-sized word with LEB-128.
 wordLEB128 :: Word -> Builder 10
 {-# inline wordLEB128 #-}
@@ -906,6 +938,24 @@ word64LEB128 (W64# w) = lebCommon (W#
     w
 #endif
   )
+
+vlqCommon :: Word -> Builder n
+vlqCommon !w = case w of
+  0 -> unsafeWord8 0
+  _ ->
+    let !startIx = 7 * quot (63 - countLeadingZeros w) 7
+     in vlqStep startIx w
+
+vlqStep ::
+     Int -- start index, must be in range [0,63] and 7 must divide it evenly
+  -> Word
+  -> Builder n
+vlqStep !ix !w
+  | ix <= 0 =
+      unsafeWord8 (unsafeWordToWord8 (unsafeShiftR w ix .&. 0b0111_1111))
+  | otherwise = unsafeAppend
+      (unsafeWord8 (unsafeWordToWord8 (unsafeShiftR w ix .|. 0b1000_0000)))
+      (vlqStep (ix - 7) w)
 
 lebCommon :: Word -> Builder n
 lebCommon !w = case quotRem w 128 of
