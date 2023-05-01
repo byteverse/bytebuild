@@ -5,9 +5,11 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
-## 0.3.13.0 -- 2023-??-??
+## 0.3.13.0 -- 2023-05-01
 
 * Add VLQ builders for Word32 and Word64.
+* Add chunks-to-builder function
+* Add textUtf8 for copying text to builder with text-2.0 and newer
 
 ## 0.3.12.0 -- 2022-12-01
 
