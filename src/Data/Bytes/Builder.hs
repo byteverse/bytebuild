@@ -17,6 +17,7 @@ module Data.Bytes.Builder
     -- * Evaluation
   , run
   , runOnto
+  , runOntoLength
   , reversedOnto
   , putMany
   , putManyConsLength
@@ -211,7 +212,7 @@ run !hint bldr = runOnto hint bldr ChunksNil
 runOnto ::
      Int -- ^ Size of initial chunk (use 4080 if uncertain)
   -> Builder -- ^ Builder
-  -> Chunks
+  -> Chunks -- ^ Suffix
   -> Chunks
 runOnto hint@(I# hint# ) (Builder f) cs0 = runST $ do
   MutableByteArray buf0 <- PM.newByteArray hint
@@ -219,6 +220,22 @@ runOnto hint@(I# hint# ) (Builder f) cs0 = runST $ do
     (# s1, bufX, offX, _, csX #) ->
       (# s1, Mutable bufX offX csX #)
   reverseCommitsOntoChunks cs0 cs
+
+-- | Variant of 'runOnto' that additionally returns the number of bytes
+-- consed onto the suffix.
+runOntoLength ::
+     Int -- ^ Size of initial chunk (use 4080 if uncertain)
+  -> Builder -- ^ Builder
+  -> Chunks -- ^ Suffix
+  -> (Int,Chunks)
+runOntoLength hint@(I# hint# ) (Builder f) cs0 = runST $ do
+  MutableByteArray buf0 <- PM.newByteArray hint
+  cs <- ST $ \s0 -> case f buf0 0# hint# Initial s0 of
+    (# s1, bufX, offX, _, csX #) ->
+      (# s1, Mutable bufX offX csX #)
+  let !n = addCommitsLength 0 cs
+  ch <- reverseCommitsOntoChunks cs0 cs
+  pure (n,ch)
 
 -- | Variant of 'runOnto' that conses the additional chunks
 -- in reverse order.
