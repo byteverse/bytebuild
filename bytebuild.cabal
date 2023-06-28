@@ -56,7 +56,6 @@ library
     , integer-logarithms >=1.0.3 && <1.1
     , natural-arithmetic >=0.1 && <0.3
     , primitive-offset >=0.2 && <0.3
-    , primitive-unlifted >=0.1.2 && <0.2
     , run-st >=0.1.2 && <0.2
     , template-haskell >=2.16
     , text >=1.2 && <2.2
