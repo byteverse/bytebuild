@@ -5,9 +5,10 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
-## 0.3.14.0 -- 2023-??-??
+## 0.3.14.0 -- 2023-07-20
 
 * Add `runOntoLength`.
+* Allow building with GHC 9.6.
 
 ## 0.3.13.0 -- 2023-05-01
 
