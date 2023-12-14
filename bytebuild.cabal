@@ -49,10 +49,10 @@ library
   reexported-modules:
     Data.Bytes.Chunks
   build-depends:
-    , base >=4.12.0.0 && <4.19
+    , base >=4.12.0.0 && <4.20
     , byteslice >=0.2.6 && <0.3
-    , bytestring >=0.10.8.2 && <0.12
-    , haskell-src-meta >=0.8
+    , bytestring >=0.10.8.2 && <0.13
+    , haskell-src-meta >=0.8.13
     , integer-logarithms >=1.0.3 && <1.1
     , natural-arithmetic >=0.1 && <0.3
     , primitive-offset >=0.2 && <0.3
