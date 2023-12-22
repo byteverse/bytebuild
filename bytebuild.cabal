@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: bytebuild
-version: 0.3.14.0
+version: 0.3.15.0
 synopsis: Build byte arrays
 description:
   This is similar to the builder facilities provided by

@@ -33,22 +33,25 @@ module Data.Bytes.Builder.Unsafe
     -- @Data.Bytes.Builder@ instead.
   , stringUtf8
   , cstring
+    -- * Pasting with Preconditions
+  , pasteUtf8TextJson#
   ) where
 
 import Control.Monad.Primitive (primitive_)
 import Data.Bytes.Chunks (Chunks(ChunksCons))
 import Data.Bytes.Types (Bytes(Bytes))
+import Data.Char (ord)
 import Data.Primitive (MutableByteArray(..),ByteArray(..))
+import Data.Word (Word8)
 import Foreign.C.String (CString)
 import GHC.Base (unpackCString#,unpackCStringUtf8#)
-import GHC.Exts ((-#),(+#),(>#),(>=#))
+import GHC.Exts ((-#),(+#),(>#),(>=#),Char(C#))
 import GHC.Exts (Addr#,ByteArray#,MutableByteArray#,Int(I#),Ptr(Ptr))
 import GHC.Exts (RealWorld,IsString,Int#,State#)
-import GHC.ST (ST(ST))
 import GHC.IO (stToIO)
+import GHC.ST (ST(ST))
 
 import qualified Compat as C
-
 import qualified Data.Bytes.Builder.Bounded as Bounded
 import qualified Data.Bytes.Builder.Bounded.Unsafe as UnsafeBounded
 import qualified Data.Primitive as PM
@@ -311,3 +314,63 @@ commitDistance target !n (Mutable buf len cs) =
   case Exts.sameMutableByteArray# target buf of
     1# -> n +# len
     _ -> commitDistance target (n +# len) cs
+
+-- | Encode (UTF-8 encoded) text as a JSON string, wrapping it in double quotes.
+-- This escapes all characters with code points below @0x20@.
+--
+-- * Precondition: The slice of the byte argument is UTF-8 encoded text.
+-- * Precondition: There is enough space in the buffer for the result
+--   to be written to. A simple way to ensure enough space is to allocate
+--   @3N + 2@ bytes, where N is the length of the argument. However, the
+--   caller may use clever heuristics to find a lower upper bound.
+-- * Result: The next offset in the destination buffer
+pasteUtf8TextJson# ::
+     ByteArray# -- ^ source
+  -> Int# -- ^ source offset
+  -> Int# -- ^ source length
+  -> MutableByteArray# s -- ^ destination buffer
+  -> Int# -- ^ offset into destination buffer
+  -> State# s -- ^ state token
+  -> (# State# s, Int# #) -- returns next destination offset
+{-# noinline pasteUtf8TextJson# #-}
+pasteUtf8TextJson# src# soff0# slen0# dst# doff0# s0# =
+  let ST f = do
+        let dst = MutableByteArray dst#
+        let doff0 = I# doff0#
+        PM.writeByteArray dst doff0 (c2w '"')
+        let go !soff !slen !doff = if slen > 0
+              then case indexChar8Array (ByteArray src#) soff of
+                '\\' -> write2 dst doff '\\' '\\' *> go (soff + 1) (slen - 1) (doff + 2)
+                '\"' -> write2 dst doff '\\' '\"' *> go (soff + 1) (slen - 1) (doff + 2)
+                c -> if c >= '\x20'
+                  then PM.writeByteArray dst doff (c2w c) *> go (soff + 1) (slen - 1) (doff + 1)
+                  else case c of
+                    '\n' -> write2 dst doff '\\' 'n' *> go (soff + 1) (slen - 1) (doff + 2)
+                    '\r' -> write2 dst doff '\\' 'r' *> go (soff + 1) (slen - 1) (doff + 2)
+                    '\t' -> write2 dst doff '\\' 't' *> go (soff + 1) (slen - 1) (doff + 2)
+                    _ -> do
+                      write2 dst doff '\\' 'u'
+                      doff' <- UnsafeBounded.pasteST
+                        (Bounded.word16PaddedUpperHex (fromIntegral (c2w c)))
+                        dst (doff + 2)
+                      go (soff + 1) (slen - 1) doff'
+              else pure doff
+        doffRes <- go (I# soff0#) (I# slen0#) (doff0 + 1)
+        PM.writeByteArray dst doffRes (c2w '"')
+        pure (doffRes + 1)
+      !(# !s1, I# dstFinal #) = f s0#
+   in (# s1, dstFinal #)
+
+c2w :: Char -> Word8
+{-# inline c2w #-}
+c2w = fromIntegral . ord
+
+-- Internal. Write two characters in the ASCII plane to a byte array.
+write2 :: MutableByteArray s -> Int -> Char -> Char -> ST s ()
+write2 marr ix a b = do
+  PM.writeByteArray marr ix (c2w a)
+  PM.writeByteArray marr (ix + 1) (c2w b)
+
+indexChar8Array :: ByteArray -> Int -> Char
+{-# inline indexChar8Array #-}
+indexChar8Array (ByteArray b) (I# i) = C# (Exts.indexCharArray# b i)

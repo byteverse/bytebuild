@@ -159,10 +159,10 @@ import Data.Bytes.Builder.Unsafe (Commits(Initial,Mutable,Immutable))
 import Data.Bytes.Builder.Unsafe (commitsOntoChunks)
 import Data.Bytes.Builder.Unsafe (reverseCommitsOntoChunks)
 import Data.Bytes.Builder.Unsafe (stringUtf8,cstring,fromEffect)
+import Data.Bytes.Builder.Unsafe (pasteUtf8TextJson#)
 import Data.Bytes.Chunks (Chunks(ChunksCons,ChunksNil))
 import Data.Bytes.Types (Bytes(Bytes),MutableBytes(MutableBytes))
 import Data.ByteString.Short.Internal (ShortByteString(SBS))
-import Data.Char (ord)
 import Data.Foldable (foldlM)
 import Data.Int (Int64,Int32,Int16,Int8)
 import Data.Primitive (ByteArray(..),MutableByteArray(..),PrimArray(..))
@@ -173,7 +173,7 @@ import Data.Word.Zigzag (toZigzagNative,toZigzag32,toZigzag64)
 import Foreign.C.String (CStringLen)
 import GHC.ByteOrder (ByteOrder(BigEndian,LittleEndian),targetByteOrder)
 import GHC.Exts (MutableByteArray#,Addr#,(*#),oneShot)
-import GHC.Exts (Int(I#),Char(C#),Int#,State#,ByteArray#,(>=#))
+import GHC.Exts (Int(I#),Int#,State#,ByteArray#,(>=#))
 import GHC.Exts (RealWorld,(+#),(-#),(<#))
 import GHC.Integer.Logarithms.Compat (integerLog2#)
 import GHC.IO (IO(IO),stToIO)
@@ -795,38 +795,18 @@ asWord8s (PrimArray x) = PrimArray x
 -- byte sequence is UTF-8 encoded text.
 slicedUtf8TextJson :: ByteArray# -> Int# -> Int# -> Builder
 {-# noinline slicedUtf8TextJson #-}
-slicedUtf8TextJson !src# !soff0# !slen0# = fromFunction reqLen $ \dst doff0 -> do
-  PM.writeByteArray dst doff0 (c2w '"')
-  let go !soff !slen !doff = if slen > 0
-        then case indexChar8Array (ByteArray src#) soff of
-          '\\' -> write2 dst doff '\\' '\\' *> go (soff + 1) (slen - 1) (doff + 2)
-          '\"' -> write2 dst doff '\\' '\"' *> go (soff + 1) (slen - 1) (doff + 2)
-          c -> if c >= '\x20'
-            then PM.writeByteArray dst doff (c2w c) *> go (soff + 1) (slen - 1) (doff + 1)
-            else case c of
-              '\n' -> write2 dst doff '\\' 'n' *> go (soff + 1) (slen - 1) (doff + 2)
-              '\r' -> write2 dst doff '\\' 'r' *> go (soff + 1) (slen - 1) (doff + 2)
-              '\t' -> write2 dst doff '\\' 't' *> go (soff + 1) (slen - 1) (doff + 2)
-              _ -> do
-                write2 dst doff '\\' 'u'
-                doff' <- UnsafeBounded.pasteST
-                  (Bounded.word16PaddedUpperHex (fromIntegral (c2w c)))
-                  dst (doff + 2)
-                go (soff + 1) (slen - 1) doff'
-        else pure doff
-  doffRes <- go (I# soff0#) (I# slen0#) (doff0 + 1)
-  PM.writeByteArray dst doffRes (c2w '"')
-  pure (doffRes + 1)
+slicedUtf8TextJson !src# !soff0# !slen0# = fromFunction# reqLen#
+  ( \dst# doff0# s0# -> pasteUtf8TextJson# src# soff0# slen0# dst# doff0# s0# )
   where
-  slen0 = I# slen0#
   -- We multiply by 6 because, in the worst case, everything might be in the
   -- unprintable ASCII range. The plus 2 is for the quotes on the ends.
-  reqLen = (6 * slen0) + 2
+  !reqLen# = (6# *# slen0# ) +# 2#
 
 -- | Constructor for 'Builder' that works on a function with lifted
 -- arguments instead of unlifted ones. This is just as unsafe as the
 -- actual constructor.
 fromFunction :: Int -> (forall s. MutableByteArray s -> Int -> ST s Int) -> Builder
+{-# inline fromFunction #-}
 fromFunction (I# req) f = Builder $ \buf0 off0 len0 cs0 s0 ->
   let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# req of
         1# -> (# s0, buf0, off0, len0, cs0 #)
@@ -837,11 +817,17 @@ fromFunction (I# req) f = Builder $ \buf0 off0 len0 cs0 s0 ->
    in case unST (f (MutableByteArray buf1) (I# off1)) s1 of
         (# s2, I# off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
 
--- Internal. Write two characters in the ASCII plane to a byte array.
-write2 :: MutableByteArray s -> Int -> Char -> Char -> ST s ()
-write2 marr ix a b = do
-  PM.writeByteArray marr ix (c2w a)
-  PM.writeByteArray marr (ix + 1) (c2w b)
+fromFunction# :: Int# -> (forall s. MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #) ) -> Builder
+{-# inline fromFunction# #-}
+fromFunction# req f = Builder $ \buf0 off0 len0 cs0 s0 ->
+  let !(# s1, buf1, off1, len1, cs1 #) = case len0 >=# req of
+        1# -> (# s0, buf0, off0, len0, cs0 #)
+        _ -> let !(I# lenX) = max 4080 (I# req) in
+          case Exts.newByteArray# lenX s0 of
+            (# sX, bufX #) ->
+              (# sX, bufX, 0#, lenX, Mutable buf0 off0 cs0 #)
+   in case f buf1 off1 s1 of
+        (# s2, off2 #) -> (# s2, buf1, off2, len1 -# (off2 -# off1), cs1 #)
 
 -- | Create a builder from text. The text will be UTF-8 encoded.
 shortTextUtf8 :: ShortText -> Builder
@@ -864,6 +850,7 @@ textUtf8 (I.Text (A.ByteArray b) off len) =
 -- * @\\_"_\/ ==\> "\\\\_\\"_\/"@ (escapes backslashes and quotes)
 -- * @hello\<ESC\>world ==> "hello\\u001Bworld"@ (where @\<ESC\>@ is code point 0x1B)
 shortTextJsonString :: ShortText -> Builder
+{-# inline shortTextJsonString #-}
 shortTextJsonString a =
   let !(ByteArray ba) = shortTextToByteArray a
       !(I# len) = PM.sizeofByteArray (ByteArray ba)
@@ -1204,23 +1191,20 @@ shortTextToByteArray :: ShortText -> ByteArray
 shortTextToByteArray x = case TS.toShortByteString x of
   SBS a -> ByteArray a
 
-indexChar8Array :: ByteArray -> Int -> Char
-indexChar8Array (ByteArray b) (I# i) = C# (Exts.indexCharArray# b i)
-
-c2w :: Char -> Word8
-c2w = fromIntegral . ord
-
 -- | Encode a signed machine-sized integer with LEB-128. This uses
 -- zig-zag encoding.
 intLEB128 :: Int -> Builder
+{-# inline intLEB128 #-}
 intLEB128 = wordLEB128 . toZigzagNative
 
 -- | Encode a 32-bit signed integer with LEB-128. This uses zig-zag encoding.
 int32LEB128 :: Int32 -> Builder
+{-# inline int32LEB128 #-}
 int32LEB128 = word32LEB128 . toZigzag32
 
 -- | Encode a 64-bit signed integer with LEB-128. This uses zig-zag encoding.
 int64LEB128 :: Int64 -> Builder
+{-# inline int64LEB128 #-}
 int64LEB128 = word64LEB128 . toZigzag64
 
 -- | Encode a machine-sized word with LEB-128.
