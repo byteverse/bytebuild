@@ -321,7 +321,7 @@ commitDistance target !n (Mutable buf len cs) =
 -- * Precondition: The slice of the byte argument is UTF-8 encoded text.
 -- * Precondition: There is enough space in the buffer for the result
 --   to be written to. A simple way to ensure enough space is to allocate
---   @3N + 2@ bytes, where N is the length of the argument. However, the
+--   @6N + 2@ bytes, where N is the length of the argument. However, the
 --   caller may use clever heuristics to find a lower upper bound.
 -- * Result: The next offset in the destination buffer
 pasteUtf8TextJson# ::

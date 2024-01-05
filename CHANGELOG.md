@@ -9,6 +9,7 @@ to ease the migration process.
 
 * Add `Data.Bytes.Builder.Unsafe.pasteUtf8TextJson#` for users who need
   to perform JSON string encoding without using a builder.
+* Add `Data.Bytes.Builder.textJsonString` when building with text 2.0+
 
 ## 0.3.14.0 -- 2023-07-20
 

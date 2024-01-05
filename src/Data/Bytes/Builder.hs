@@ -32,6 +32,7 @@ module Data.Bytes.Builder
   , shortByteString
 #if MIN_VERSION_text(2,0,0)
   , textUtf8
+  , textJsonString
 #endif
   , shortTextUtf8
   , shortTextJsonString
@@ -855,6 +856,12 @@ shortTextJsonString a =
   let !(ByteArray ba) = shortTextToByteArray a
       !(I# len) = PM.sizeofByteArray (ByteArray ba)
    in slicedUtf8TextJson ba 0# len
+
+#if MIN_VERSION_text(2,0,0)
+textJsonString :: Text -> Builder
+{-# inline textJsonString #-}
+textJsonString (I.Text (A.ByteArray ba) (I# off) (I# len)) = slicedUtf8TextJson ba off len
+#endif
 
 -- | Encodes an unsigned 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the
