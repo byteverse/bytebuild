@@ -348,6 +348,8 @@ pasteUtf8TextJson# src# soff0# slen0# dst# doff0# s0# =
                     '\n' -> write2 dst doff '\\' 'n' *> go (soff + 1) (slen - 1) (doff + 2)
                     '\r' -> write2 dst doff '\\' 'r' *> go (soff + 1) (slen - 1) (doff + 2)
                     '\t' -> write2 dst doff '\\' 't' *> go (soff + 1) (slen - 1) (doff + 2)
+                    '\b' -> write2 dst doff '\\' 'b' *> go (soff + 1) (slen - 1) (doff + 2)
+                    '\f' -> write2 dst doff '\\' 'f' *> go (soff + 1) (slen - 1) (doff + 2)
                     _ -> do
                       write2 dst doff '\\' 'u'
                       doff' <- UnsafeBounded.pasteST
