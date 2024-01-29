@@ -105,6 +105,7 @@ module Data.Bytes.Builder
   , int32LEB128
   , int64LEB128
   , wordLEB128
+  , word16LEB128
   , word32LEB128
   , word64LEB128
     -- **** VLQ
@@ -1218,6 +1219,11 @@ int64LEB128 = word64LEB128 . toZigzag64
 wordLEB128 :: Word -> Builder
 {-# inline wordLEB128 #-}
 wordLEB128 w = fromBounded Nat.constant (Bounded.wordLEB128 w)
+
+-- | Encode a 16-bit word with LEB-128.
+word16LEB128 :: Word16 -> Builder
+{-# inline word16LEB128 #-}
+word16LEB128 w = fromBounded Nat.constant (Bounded.word16LEB128 w)
 
 -- | Encode a 32-bit word with LEB-128.
 word32LEB128 :: Word32 -> Builder

@@ -74,6 +74,7 @@ module Data.Bytes.Builder.Bounded
   , char
     -- ** Native
   , wordPaddedDec2
+  , wordPaddedDec3
   , wordPaddedDec4
   , wordPaddedDec9
     -- ** Machine-Readable
@@ -102,6 +103,7 @@ module Data.Bytes.Builder.Bounded
     -- with the high bit of each output byte set to 1 in all bytes except for
     -- the final byte.
   , wordLEB128
+  , word16LEB128
   , word32LEB128
   , word64LEB128
     -- **** VLQ
@@ -788,6 +790,14 @@ wordPaddedDec4 !w = Unsafe.construct $ \arr off -> do
     ) arr (off + 3) w
   pure (off + 4)
 
+wordPaddedDec3 :: Word -> Builder 3
+wordPaddedDec3 !w = Unsafe.construct $ \arr off -> do
+  putRem10
+    (putRem10 $ putRem10
+     (\_ _ _ -> pure ())
+    ) arr (off + 2) w
+  pure (off + 3)
+
 -- | Encode a number less than 1e9 as a decimal number, zero-padding it to
 -- nine digits. For example: 0 is encoded as @000000000@ and 5 is encoded as
 -- @000000005@.
@@ -922,6 +932,11 @@ word64Vlq (W64# w) = vlqCommon (W#
 wordLEB128 :: Word -> Builder 10
 {-# inline wordLEB128 #-}
 wordLEB128 (W# w) = lebCommon (W# w)
+
+-- | Encode a 32-bit word with LEB-128.
+word16LEB128 :: Word16 -> Builder 3
+{-# inline word16LEB128 #-}
+word16LEB128 (W16# w) = lebCommon (W# (C.word16ToWord# w))
 
 -- | Encode a 32-bit word with LEB-128.
 word32LEB128 :: Word32 -> Builder 5
