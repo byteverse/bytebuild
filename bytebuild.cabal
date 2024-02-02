@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: bytebuild
-version: 0.3.16.0
+version: 0.3.16.1
 synopsis: Build byte arrays
 description:
   This is similar to the builder facilities provided by
@@ -50,7 +50,7 @@ library
   reexported-modules:
     Data.Bytes.Chunks
   build-depends:
-    , base >=4.12.0.0 && <4.20
+    , base >=4.17.0.0 && <4.20
     , byteslice >=0.2.6 && <0.3
     , bytestring >=0.10.8.2 && <0.13
     , haskell-src-meta >=0.8.13
@@ -103,7 +103,7 @@ test-suite test
     , tasty >=1.2.3 && <1.6
     , tasty-hunit >=0.10.0.2 && <0.11
     , tasty-quickcheck >=0.10.1 && <0.11
-    , text >=1.2 && <2.2
+    , text >=2.0 && <2.2
     , vector
     , wide-word >=0.1.0.9 && <0.2
 
