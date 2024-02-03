@@ -1,13 +1,12 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module Data.Bytes.Builder.Class
-  ( ToBuilder(..)
+  ( ToBuilder (..)
   ) where
 
+import Data.ByteString.Short (ShortByteString)
 import Data.Bytes (Bytes)
 import Data.Bytes.Builder (Builder)
-import Data.ByteString.Short (ShortByteString)
 import Data.Int
 import Data.Primitive.ByteArray (ByteArray)
 import Data.Text.Short (ShortText)
@@ -15,14 +14,15 @@ import Data.Word
 
 import qualified Data.Bytes.Builder as Builder
 
--- | Types that can be encoded as a builder. Human-readable encodings
--- are used when possible. For example, numbers are encoded an ascii-encoded
--- decimal characters. UTF-8 is preferred for textual types. For types
--- that represent arbitrary bytes (e.g. Bytes, ByteString), the bytes
--- are preserved.
---
--- The goal of this typeclass is to reduce the size of builders produced
--- by quasiquotation.
+{- | Types that can be encoded as a builder. Human-readable encodings
+are used when possible. For example, numbers are encoded an ascii-encoded
+decimal characters. UTF-8 is preferred for textual types. For types
+that represent arbitrary bytes (e.g. Bytes, ByteString), the bytes
+are preserved.
+
+The goal of this typeclass is to reduce the size of builders produced
+by quasiquotation.
+-}
 class ToBuilder a where
   toBuilder :: a -> Builder
 
