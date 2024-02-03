@@ -1,8 +1,8 @@
-{-# language DataKinds #-}
-{-# language TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Data.Bytes.Builder.Bounded.Class
-  ( ToBoundedBuilder(..)
+  ( ToBoundedBuilder (..)
   ) where
 
 import Data.Int
@@ -11,14 +11,15 @@ import Data.Word
 import qualified Data.Bytes.Builder.Bounded as Bounded
 import qualified GHC.TypeNats as GHC
 
--- | Variant of To that can be encoded as a builder. Human-readable encodings
--- are used when possible. For example, numbers are encoded an ascii-encoded
--- decimal characters. UTF-8 is preferred for textual types. For types
--- that represent arbitrary bytes (e.g. Bytes, ByteString), the bytes
--- are preserved.
---
--- The goal of this typeclass is to reduce the size of builders produced
--- by quasiquotation.
+{- | Variant of To that can be encoded as a builder. Human-readable encodings
+are used when possible. For example, numbers are encoded an ascii-encoded
+decimal characters. UTF-8 is preferred for textual types. For types
+that represent arbitrary bytes (e.g. Bytes, ByteString), the bytes
+are preserved.
+
+The goal of this typeclass is to reduce the size of builders produced
+by quasiquotation.
+-}
 class ToBoundedBuilder a where
   type BoundedBuilderLength a :: GHC.Nat
   toBuilder :: a -> Bounded.Builder (BoundedBuilderLength a)

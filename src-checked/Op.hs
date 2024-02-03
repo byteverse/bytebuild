@@ -1,5 +1,5 @@
-{-# language MagicHash #-}
-{-# language UnboxedTuples #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module Op
   ( writeCharArray#
@@ -7,9 +7,9 @@ module Op
   , copyMutableByteArray#
   ) where
 
-import GHC.Exts ((<#),(>=#),State#,Int#,MutableByteArray#,ByteArray#,Char#)
-import GHC.Int (Int(I#))
+import GHC.Exts (ByteArray#, Char#, Int#, MutableByteArray#, State#, (<#), (>=#))
 import qualified GHC.Exts as Exts
+import GHC.Int (Int (I#))
 
 writeCharArray# :: MutableByteArray# s -> Int# -> Char# -> State# s -> State# s
 writeCharArray# arr i v st = case i <# 0# of
@@ -27,8 +27,8 @@ copyByteArray# src soff dst doff len s0 =
       , I# doff >= 0
       , I# len >= 0
       , I# doff + I# len <= I# sz
-      , I# soff + I# len <= I# (Exts.sizeofByteArray# src)
-        -> Exts.copyByteArray# src soff dst doff len s1
+      , I# soff + I# len <= I# (Exts.sizeofByteArray# src) ->
+          Exts.copyByteArray# src soff dst doff len s1
       | otherwise -> error "copyByteArray#: index range out of bounds"
 
 copyMutableByteArray# :: MutableByteArray# s -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s
@@ -40,6 +40,6 @@ copyMutableByteArray# src soff dst doff len s0 =
         , I# doff >= 0
         , I# len >= 0
         , I# doff + I# len <= I# szDst
-        , I# soff + I# len <= I# szSrc
-          -> Exts.copyMutableByteArray# src soff dst doff len s2
+        , I# soff + I# len <= I# szSrc ->
+            Exts.copyMutableByteArray# src soff dst doff len s2
         | otherwise -> error "copyMutableByteArray#: index range out of bounds"

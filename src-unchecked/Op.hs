@@ -1,4 +1,4 @@
-{-# language MagicHash #-}
+{-# LANGUAGE MagicHash #-}
 
 module Op
   ( writeCharArray#
@@ -6,4 +6,4 @@ module Op
   , copyMutableByteArray#
   ) where
 
-import GHC.Exts (copyMutableByteArray#,writeCharArray#,copyByteArray#,copyMutableByteArray#)
+import GHC.Exts (copyByteArray#, copyMutableByteArray#, writeCharArray#)

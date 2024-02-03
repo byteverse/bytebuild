@@ -9,50 +9,53 @@ module Data.Bytes.Builder.Template
 
 import Control.Monad (when)
 import Data.Bytes.Builder.Class (toBuilder)
-import GHC.Ptr (Ptr(Ptr))
+import GHC.Ptr (Ptr (Ptr))
 import Language.Haskell.Meta.Parse (parseExp)
-import Language.Haskell.TH (Q,Exp)
-import Language.Haskell.TH.Lib (integerL,stringPrimL,litE)
-import Language.Haskell.TH.Quote (QuasiQuoter(..))
+import Language.Haskell.TH (Exp, Q)
+import Language.Haskell.TH.Lib (integerL, litE, stringPrimL)
+import Language.Haskell.TH.Quote (QuasiQuoter (..))
 
-import qualified Data.Bytes.Builder as Builder
 import qualified Data.ByteString.Short as SBS
+import qualified Data.Bytes.Builder as Builder
 import qualified Data.Text.Short as TS
 import qualified Language.Haskell.TH as TH
 
--- | A quasiquoter for builders. Haskell expressions are interpolated
--- with backticks, and the @ToBuilder@ class is used to convert them
--- to builders. Several common escape sequences for whitespace and
--- control characters are recongized. Consider the following expression,
--- where the binding @partition@ has type @Word32@:
---
--- > [templ|[WARN] Partition `partition` has invalid data.\n|]
---
--- This expression has type @Builder@ and expands to:
---
--- > Builder.cstringLen (Ptr "[WARN] Partition "#, 17) <>
--- > Builder.toBuilder partition <>
--- > Builder.cstringLen (Ptr " has invalid data.\n"#, 19)
---
--- The @ToBuilder@ instance for @Word32@ uses decimal encoding, so this
--- would result in the following if @partition@ was 42 (with a newline
--- character at the end):
---
--- > [WARN] Partition 42 has invalid data.
---
--- In the future, a more sophisticated @bbldr@ variant will be added
--- that will support expressions where the maximum length of the entire
--- builder can be computed at compile time. 
+{- | A quasiquoter for builders. Haskell expressions are interpolated
+with backticks, and the @ToBuilder@ class is used to convert them
+to builders. Several common escape sequences for whitespace and
+control characters are recongized. Consider the following expression,
+where the binding @partition@ has type @Word32@:
+
+> [templ|[WARN] Partition `partition` has invalid data.\n|]
+
+This expression has type @Builder@ and expands to:
+
+> Builder.cstringLen (Ptr "[WARN] Partition "#, 17) <>
+> Builder.toBuilder partition <>
+> Builder.cstringLen (Ptr " has invalid data.\n"#, 19)
+
+The @ToBuilder@ instance for @Word32@ uses decimal encoding, so this
+would result in the following if @partition@ was 42 (with a newline
+character at the end):
+
+> [WARN] Partition 42 has invalid data.
+
+In the future, a more sophisticated @bbldr@ variant will be added
+that will support expressions where the maximum length of the entire
+builder can be computed at compile time.
+-}
 bldr :: QuasiQuoter
-bldr = QuasiQuoter
-  { quoteExp = templExp
-  , quotePat = notHandled "patterns"
-  , quoteType = notHandled "types"
-  , quoteDec = notHandled "declarations"
-  }
-  where
-  notHandled things _ = fail $
-    things ++ "are not handled by the byte template quasiquoter"
+bldr =
+  QuasiQuoter
+    { quoteExp = templExp
+    , quotePat = notHandled "patterns"
+    , quoteType = notHandled "types"
+    , quoteDec = notHandled "declarations"
+    }
+ where
+  notHandled things _ =
+    fail $
+      things ++ "are not handled by the byte template quasiquoter"
 
 templExp :: String -> Q Exp
 templExp inp = do
@@ -62,7 +65,7 @@ templExp inp = do
     Right [] -> fail "empty template"
     Right v -> pure v
   let expParts = compile <$> rawParts
-  foldl1 (\e1 e2 -> [| $e1 <> $e2 |]) expParts
+  foldl1 (\e1 e2 -> [|$e1 <> $e2|]) expParts
 
 checkOverloadedStrings :: Q ()
 checkOverloadedStrings = do
@@ -87,40 +90,40 @@ compile (Splice str) = case parseExp str of
 
 parse :: String -> Either String Template
 parse = partsLoop
-  where
+ where
   partsLoop "" = do
     pure []
-  partsLoop ('`':inp) = do
+  partsLoop ('`' : inp) = do
     (!spl, !rest) <- spliceLoop inp
-    (Splice spl:) <$> partsLoop rest
+    (Splice spl :) <$> partsLoop rest
   partsLoop inp = do
     (!lit, !rest) <- litLoop "" inp
-    (Literal lit:) <$> partsLoop rest
+    (Literal lit :) <$> partsLoop rest
   litLoop :: String -> String -> Either String (String, String)
   litLoop !acc rest@"" = pure (reverse acc, rest)
-  litLoop !acc rest@('`':_) = pure (reverse acc, rest)
-  litLoop !acc ('\\':next) = do
+  litLoop !acc rest@('`' : _) = pure (reverse acc, rest)
+  litLoop !acc ('\\' : next) = do
     (c, rest) <- parseEscape next
-    litLoop (c:acc) rest
-  litLoop !acc (c:rest) = litLoop (c:acc) rest
+    litLoop (c : acc) rest
+  litLoop !acc (c : rest) = litLoop (c : acc) rest
   spliceLoop :: String -> Either String (String, String)
   spliceLoop inp = case break (== '`') inp of
     ([], _) -> Left "internal error"
-    (hs, '`':rest) -> pure (hs, rest)
-    (_, _:_) -> Left "internal error"
+    (hs, '`' : rest) -> pure (hs, rest)
+    (_, _ : _) -> Left "internal error"
     (_, []) -> Left "unterminated interpolation"
   parseEscape :: String -> Either String (Char, String)
   parseEscape "" = Left "incomplete escape"
-  parseEscape ('\\':rest) = pure ('\\', rest)
-  parseEscape ('`':rest) = pure ('`', rest)
-  parseEscape ('\'':rest) = pure ('\'', rest)
-  parseEscape ('\"':rest) = pure ('\"', rest)
-  parseEscape ('0':rest) = pure ('\0', rest)
-  parseEscape ('a':rest) = pure ('\a', rest)
-  parseEscape ('b':rest) = pure ('\b', rest)
-  parseEscape ('f':rest) = pure ('\f', rest)
-  parseEscape ('n':rest) = pure ('\n', rest)
-  parseEscape ('r':rest) = pure ('\r', rest)
-  parseEscape ('t':rest) = pure ('\t', rest)
-  parseEscape ('v':rest) = pure ('\v', rest)
-  parseEscape (c:_) = Left $ "unrecognized escape: \\" ++ [c]
+  parseEscape ('\\' : rest) = pure ('\\', rest)
+  parseEscape ('`' : rest) = pure ('`', rest)
+  parseEscape ('\'' : rest) = pure ('\'', rest)
+  parseEscape ('\"' : rest) = pure ('\"', rest)
+  parseEscape ('0' : rest) = pure ('\0', rest)
+  parseEscape ('a' : rest) = pure ('\a', rest)
+  parseEscape ('b' : rest) = pure ('\b', rest)
+  parseEscape ('f' : rest) = pure ('\f', rest)
+  parseEscape ('n' : rest) = pure ('\n', rest)
+  parseEscape ('r' : rest) = pure ('\r', rest)
+  parseEscape ('t' : rest) = pure ('\t', rest)
+  parseEscape ('v' : rest) = pure ('\v', rest)
+  parseEscape (c : _) = Left $ "unrecognized escape: \\" ++ [c]
