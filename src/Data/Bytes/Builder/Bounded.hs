@@ -1,4 +1,3 @@
-{-# language CPP #-}
 {-# language BangPatterns #-}
 {-# language BinaryLiterals #-}
 {-# language DataKinds #-}
@@ -241,12 +240,7 @@ doubleDec (D# d) = Builder (\arr off0 s0 -> doubleDec# d arr off0 s0)
 -- | Requires up to 19 bytes. Encodes an unsigned 64-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
 word64Dec :: Word64 -> Builder 19
-word64Dec (W64# w) = wordCommonDec#
-#if MIN_VERSION_base(4,17,0)
-    (word64ToWord# w)
-#else
-    w
-#endif
+word64Dec (W64# w) = wordCommonDec# (word64ToWord# w)
 
 -- | Requires up to 10 bytes. Encodes an unsigned 32-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
@@ -281,12 +275,7 @@ wordDec (W# w) = wordCommonDec# w
 -- Negative numbers are preceded by a minus sign. Positive numbers
 -- are not preceded by anything.
 int64Dec :: Int64 -> Builder 20
-int64Dec (I64# w) = intCommonDec#
-#if MIN_VERSION_base(4,17,0)
-    (int64ToInt# w)
-#else
-    w
-#endif
+int64Dec (I64# w) = intCommonDec# (int64ToInt# w)
 
 -- | Requires up to 11 bytes. Encodes a signed 32-bit integer as decimal.
 -- This encoding never starts with a zero unless the argument was zero.
@@ -342,12 +331,7 @@ wordCommonDec# w# = Unsafe.construct $ \arr off0 -> if w /= 0
     writeByteArray arr off0 (c2w '0')
     pure (off0 + 1)
   where
-  w = W64#
-#if MIN_VERSION_base(4,17,0)
-    (wordToWord64# w#)
-#else
-    w#
-#endif
+  w = W64# (wordToWord64# w#)
 
 internalWordLoop :: MutableByteArray s -> Int -> Word -> ST s Int
 {-# inline internalWordLoop #-}
@@ -379,12 +363,7 @@ intCommonDec# w# = Unsafe.construct $ \arr off0 -> case compare w 0 of
     writeByteArray arr off0 (c2w '-')
     internalWordLoop arr (off0 + 1) (fromIntegral (negate w))
   where
-  w = I64#
-#if MIN_VERSION_base(4,17,0)
-    (intToInt64# w#)
-#else
-    w#
-#endif
+  w = I64# (intToInt64# w#)
 
 -- Convert a number between 0 and 16 to the ASCII
 -- representation of its hexadecimal character.
@@ -456,25 +435,14 @@ word128PaddedUpperHex (Word128 w64 w0) =
 -- uppercase for the alphabetical digits. For example, this encodes the
 -- number 1022 as @00000000000003FE@.
 word64PaddedUpperHex :: Word64 -> Builder 16
-word64PaddedUpperHex (W64# w) = word64PaddedUpperHex#
-#if MIN_VERSION_base(4,17,0)
-    (word64ToWord# w)
-#else
-    w
-#endif
-
+word64PaddedUpperHex (W64# w) = word64PaddedUpperHex# (word64ToWord# w)
 
 -- | Requires exactly 16 bytes. Encodes a 64-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 16 digits. This uses
 -- lowercase for the alphabetical digits. For example, this encodes the
 -- number 1022 as @00000000000003fe@.
 word64PaddedLowerHex :: Word64 -> Builder 16
-word64PaddedLowerHex (W64# w) = word64PaddedLowerHex#
-#if MIN_VERSION_base(4,17,0)
-    (word64ToWord# w)
-#else
-    w
-#endif
+word64PaddedLowerHex (W64# w) = word64PaddedLowerHex# (word64ToWord# w)
 
 -- | Requires exactly 12 bytes. Discards the upper 16 bits of a
 -- 64-bit unsigned integer and then encodes the lower 48 bits as
@@ -482,12 +450,7 @@ word64PaddedLowerHex (W64# w) = word64PaddedLowerHex#
 -- lowercase for the alphabetical digits. For example, this encodes the
 -- number 1022 as @0000000003fe@.
 word48PaddedLowerHex :: Word64 -> Builder 12
-word48PaddedLowerHex (W64# w) = word48PaddedLowerHex#
-#if MIN_VERSION_base(4,17,0)
-    (word64ToWord# w)
-#else
-    w
-#endif
+word48PaddedLowerHex (W64# w) = word48PaddedLowerHex# (word64ToWord# w)
 
 -- | Requires exactly 8 bytes. Encodes a 32-bit unsigned integer as
 -- hexadecimal, zero-padding the encoding to 8 digits. This uses
@@ -920,13 +883,7 @@ word32Vlq (W32# w) = vlqCommon (W# (C.word32ToWord# w))
 -- | Encode a 64-bit word with VLQ (also known as VByte, Varint, VInt).
 word64Vlq :: Word64 -> Builder 10
 {-# inline word64Vlq #-}
-word64Vlq (W64# w) = vlqCommon (W#
-#if MIN_VERSION_base(4,17,0)
-    (word64ToWord# w)
-#else
-    w
-#endif
-  )
+word64Vlq (W64# w) = vlqCommon (W# (word64ToWord# w))
 
 -- | Encode a machine-sized word with LEB-128.
 wordLEB128 :: Word -> Builder 10
@@ -946,13 +903,7 @@ word32LEB128 (W32# w) = lebCommon (W# (C.word32ToWord# w))
 -- | Encode a 64-bit word with LEB-128.
 word64LEB128 :: Word64 -> Builder 10
 {-# inline word64LEB128 #-}
-word64LEB128 (W64# w) = lebCommon (W#
-#if MIN_VERSION_base(4,17,0)
-    (word64ToWord# w)
-#else
-    w
-#endif
-  )
+word64LEB128 (W64# w) = lebCommon (W# (word64ToWord# w))
 
 vlqCommon :: Word -> Builder n
 vlqCommon !w = case w of
@@ -1043,12 +994,7 @@ char c
     byteFourFour w = (0b00111111 .&. w) .|. 0b10000000
 
 int64BE :: Int64 -> Builder 8
-int64BE (I64# i) = word64BE (W64# (
-#if MIN_VERSION_base(4,17,0)
-  wordToWord64# (int2Word# (int64ToInt# i))))
-#else
-  int2Word# i))
-#endif
+int64BE (I64# i) = word64BE (W64# ( wordToWord64# (int2Word# (int64ToInt# i))))
 
 int32BE :: Int32 -> Builder 4
 int32BE (I32# i) = word32BE (W32# (C.wordToWord32# (int2Word# (C.int32ToInt# i))))
@@ -1057,13 +1003,7 @@ int16BE :: Int16 -> Builder 2
 int16BE (I16# i) = word16BE (W16# (C.wordToWord16# (int2Word# (C.int16ToInt# i))))
 
 int64LE :: Int64 -> Builder 8
-int64LE (I64# i) = word64LE (W64# (
-#if MIN_VERSION_base(4,17,0)
-  wordToWord64# (int2Word# (int64ToInt# i))))
-#else
-  int2Word# i))
-#endif
-
+int64LE (I64# i) = word64LE (W64# ( wordToWord64# (int2Word# (int64ToInt# i))))
 
 int32LE :: Int32 -> Builder 4
 int32LE (I32# i) = word32LE (W32# (C.wordToWord32# (int2Word# (C.int32ToInt# i))))
