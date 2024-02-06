@@ -8,6 +8,8 @@
 
 import Prelude hiding (replicate)
 
+-- liftA2 is needed by GHC 9.4
+import Control.Applicative (liftA2)
 import Control.Monad.ST (runST)
 import Data.Bytes.Builder
 import Data.Bytes.Builder.Template (bldr)
