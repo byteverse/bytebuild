@@ -5,6 +5,10 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
+## 0.3.16.3
+
+* Add support for building with GHC 9.10
+
 ## 0.3.16.2 -- 2024-02-06
 
 * Restore import statement for `liftA2` to fix build for GHC 9.4.
