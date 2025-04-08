@@ -28,7 +28,7 @@ maintainer:      amartin@layer3com.com
 copyright:       2019 Andrew Martin
 category:        Data
 extra-doc-files: CHANGELOG.md
-tested-with:     GHC ==9.4.8 || ==9.6.5 || ==9.8.2 || ==9.10.1
+tested-with:     GHC ==9.4.8 || ==9.6.7 || ==9.8.4 || ==9.10.2 || ==9.12.1
 
 common build-settings
   default-language: Haskell2010
@@ -57,7 +57,7 @@ library
 
   reexported-modules: Data.Bytes.Chunks
   build-depends:
-    , base                >=4.17.0.0 && <4.21
+    , base                >=4.17.0.0 && <4.22
     , byteslice           >=0.2.6    && <0.3
     , bytestring          >=0.10.8.2 && <0.13
     , haskell-src-meta    >=0.8.13
