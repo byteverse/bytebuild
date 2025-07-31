@@ -5,6 +5,10 @@ Note: Prior to version 0.3.4.0, this library was named
 `small-bytearray-builder` is now just a compatibility shim
 to ease the migration process.
 
+## 0.3.17.0
+
+* Add `hPut` to help with common case of pushing logs to stderr.
+
 ## 0.3.16.3
 
 * Add support for building with GHC 9.10
