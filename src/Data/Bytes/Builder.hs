@@ -167,6 +167,9 @@ module Data.Bytes.Builder
 
     -- * Rebuild
   , rebuild
+    
+    -- * IO
+  , hPut
   ) where
 
 import Prelude hiding (replicate)
@@ -209,6 +212,7 @@ import GHC.Natural (naturalFromInteger, naturalToInteger)
 import GHC.ST (ST (ST))
 import GHC.Word (Word (W#), Word8 (W8#))
 import Numeric.Natural (Natural)
+import System.IO (Handle)
 
 import qualified Compat as C
 
@@ -217,6 +221,7 @@ import qualified Arithmetic.Types as Arithmetic
 import qualified Data.Bytes as Bytes
 import qualified Data.Bytes.Builder.Bounded as Bounded
 import qualified Data.Bytes.Builder.Bounded.Unsafe as UnsafeBounded
+import qualified Data.Bytes.Chunks as Chunks
 import qualified Data.Primitive as PM
 import qualified Data.Text.Short as TS
 import qualified GHC.Exts as Exts
@@ -1557,3 +1562,7 @@ rebuild :: Builder -> Builder
 {-# INLINE rebuild #-}
 rebuild (Builder f) = Builder $ oneShot $ \a -> oneShot $ \b -> oneShot $ \c -> oneShot $ \d -> oneShot $ \e ->
   f a b c d e
+
+hPut :: Handle -> Builder -> IO ()
+{-# NOINLINE hPut #-}
+hPut h = Chunks.hPut h . run 256
