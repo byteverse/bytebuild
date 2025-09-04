@@ -8,6 +8,7 @@ to ease the migration process.
 ## 0.3.17.0
 
 * Add `hPut` to help with common case of pushing logs to stderr.
+* Add `ToBuilder` for `CInt`
 
 ## 0.3.16.3
 

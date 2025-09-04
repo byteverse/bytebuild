@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Data.Bytes.Builder.Class
   ( ToBuilder (..)
@@ -11,6 +12,7 @@ import Data.Int
 import Data.Primitive.ByteArray (ByteArray)
 import Data.Text.Short (ShortText)
 import Data.Word
+import Foreign.C.Types (CInt)
 
 import qualified Data.Bytes.Builder as Builder
 
@@ -93,3 +95,6 @@ instance ToBuilder Word where
 -- | uses @doubleDec@
 instance ToBuilder Double where
   toBuilder = Builder.doubleDec
+
+instance ToBuilder CInt where
+  toBuilder = Builder.int64Dec . fromIntegral @CInt @Int64
